@@ -6,11 +6,13 @@ PLUGIN_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-aether"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-aether"
+RUN_DIR="$DATA_DIR/data"
+BIN_DIR="$DATA_DIR/bin"
 CONFIG_FILE="$CONFIG_DIR/config.env"
 PID_FILE="$CONFIG_DIR/aether.pid"
-LOG_FILE="$CONFIG_DIR/aether.log"
+LOG_FILE="$DATA_DIR/aether.log"
 
-mkdir -p "$CONFIG_DIR" "$DATA_DIR/bin"
+mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$RUN_DIR" "$BIN_DIR"
 
 # Defaults
 DEFAULT_PROTOCOL="masque"
@@ -19,11 +21,12 @@ DEFAULT_NOIZE="firewall"
 DEFAULT_IP="v4"
 DEFAULT_SOCKS_PORT=1819
 DEFAULT_HTTP_PROXY_PORT=0
-DEFAULT_MARK="0xff"
+DEFAULT_MARK="0"
 DEFAULT_QUICK_RECONNECT=1
 DEFAULT_H2=0
 DEFAULT_FRAGMENT=0
 DEFAULT_EXTRA_ARGS=""
+DEFAULT_CUSTOM_BIN=""
 
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -31,6 +34,7 @@ load_config() {
     source "$CONFIG_FILE"
   fi
 
+  CUSTOM_BIN="${AETHER_CFG_BIN:-$DEFAULT_CUSTOM_BIN}"
   PROTOCOL="${AETHER_CFG_PROTOCOL:-$DEFAULT_PROTOCOL}"
   SCAN="${AETHER_CFG_SCAN:-$DEFAULT_SCAN}"
   NOIZE="${AETHER_CFG_NOIZE:-$DEFAULT_NOIZE}"
@@ -46,6 +50,7 @@ load_config() {
 
 save_config() {
   cat > "$CONFIG_FILE" <<EOF
+AETHER_CFG_BIN="${CUSTOM_BIN}"
 AETHER_CFG_PROTOCOL="${PROTOCOL}"
 AETHER_CFG_SCAN="${SCAN}"
 AETHER_CFG_NOIZE="${NOIZE}"
@@ -64,43 +69,87 @@ load_config
 
 is_cluvex_aether() {
   local candidate="$1"
-  [[ -x "$candidate" ]] || return 1
-  # Exclude desktop theme generator or false matches
+  [[ -n "$candidate" && -f "$candidate" && -x "$candidate" ]] || return 1
+  # Verify it is CluvexStudio Aether and not the desktop theme generator
   if "$candidate" --help 2>&1 | grep -iq "socks5"; then
     return 0
   fi
   return 1
 }
 
-detect_aether_bin() {
-  if [[ -n "${AETHER_BIN:-}" ]] && is_cluvex_aether "$AETHER_BIN"; then
-    echo "$AETHER_BIN"
+has_cap_net_admin() {
+  local binary="$1"
+  [[ -x "$binary" ]] || return 1
+  if command -v getcap &>/dev/null; then
+    local caps
+    caps=$(getcap "$binary" 2>/dev/null || true)
+    if [[ "$caps" == *"cap_net_admin"* ]]; then
+      return 0
+    fi
+  fi
+  if [[ "$(id -u)" -eq 0 ]]; then
     return 0
   fi
+  return 1
+}
 
+get_binary_version() {
+  local binary="$1"
+  [[ -x "$binary" ]] || return 1
+  local ver
+  ver=$("$binary" --version 2>/dev/null | head -n1 || true)
+  if [[ -n "$ver" ]]; then
+    echo "$ver"
+  else
+    echo "Unknown version"
+  fi
+}
+
+find_all_cores() {
   local candidates=(
-    "$DATA_DIR/bin/aether"
-    "$PLUGIN_ROOT/bin/aether"
+    "$CUSTOM_BIN"
+    "$BIN_DIR/aether"
     "$HOME/Downloads/Aether/aether"
+    "$PLUGIN_ROOT/bin/aether"
     "$HOME/.local/bin/aether"
     "/usr/local/bin/aether"
     "/opt/aether/aether"
   )
 
+  local seen=()
   for cand in "${candidates[@]}"; do
-    if is_cluvex_aether "$cand"; then
-      echo "$cand"
-      return 0
+    [[ -n "$cand" ]] || continue
+    if [[ ! " ${seen[*]} " =~ " ${cand} " ]]; then
+      seen+=("$cand")
+      if is_cluvex_aether "$cand"; then
+        echo "$cand"
+      fi
     fi
   done
 
   # Search PATH
   while IFS= read -r cand; do
-    if [[ -n "$cand" ]] && is_cluvex_aether "$cand"; then
-      echo "$cand"
-      return 0
+    if [[ -n "$cand" && ! " ${seen[*]} " =~ " ${cand} " ]]; then
+      seen+=("$cand")
+      if is_cluvex_aether "$cand"; then
+        echo "$cand"
+      fi
     fi
   done < <(which -a aether 2>/dev/null || true)
+}
+
+detect_aether_bin() {
+  if [[ -n "$CUSTOM_BIN" ]] && is_cluvex_aether "$CUSTOM_BIN"; then
+    echo "$CUSTOM_BIN"
+    return 0
+  fi
+
+  local first_found
+  first_found=$(find_all_cores | head -n1 || true)
+  if [[ -n "$first_found" ]]; then
+    echo "$first_found"
+    return 0
+  fi
 
   return 1
 }
@@ -109,27 +158,31 @@ has_systemd_service() {
   systemctl --user list-unit-files aether.service &>/dev/null
 }
 
-is_running() {
-  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
-    return 0
-  fi
-
+get_running_pid() {
   if [[ -f "$PID_FILE" ]]; then
     local pid
     pid=$(cat "$PID_FILE" 2>/dev/null || true)
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
       return 0
     fi
   fi
 
-  # Fallback: check pgrep for running aether WARP instance
   local pids
-  pids=$(pgrep -f "aether.*(--mark|--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  pids=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
   if [[ -n "$pids" ]]; then
+    echo "$pids" | head -n1
     return 0
   fi
 
   return 1
+}
+
+is_running() {
+  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
+    return 0
+  fi
+  get_running_pid >/dev/null 2>&1
 }
 
 is_system_proxy_on() {
@@ -186,9 +239,9 @@ probe_trace() {
 }
 
 build_args() {
+  local bin="$1"
   local args=()
 
-  # Protocol selection
   case "$PROTOCOL" in
     masque)
       args+=("--masque")
@@ -225,12 +278,12 @@ build_args() {
       ;;
   esac
 
-  # Scan mode
+  # Scan profile
   if [[ -n "$SCAN" ]]; then
     args+=("--scan" "$SCAN")
   fi
 
-  # Obfuscation
+  # Obfuscation profile
   if [[ -n "$NOIZE" ]]; then
     args+=("--noize" "$NOIZE")
   fi
@@ -242,7 +295,7 @@ build_args() {
     dual) args+=("--dual") ;;
   esac
 
-  # SOCKS5 bind
+  # SOCKS5 bind address
   args+=("--bind" "127.0.0.1:${SOCKS_PORT}")
 
   # HTTP Connect proxy
@@ -250,12 +303,16 @@ build_args() {
     args+=("--http-proxy" "127.0.0.1:${HTTP_PROXY_PORT}")
   fi
 
-  # Mark (firewall mark)
-  if [[ -n "$MARK" ]]; then
-    args+=("--mark" "$MARK")
+  # Mark (firewall mark) - only pass if mark is enabled AND binary/environment has cap_net_admin
+  if [[ "$MARK" == "1" || "$MARK" == "0xff" ]]; then
+    if has_cap_net_admin "$bin"; then
+      args+=("--mark" "0xff")
+    else
+      echo "[warning] --mark 0xff requested but binary lacks CAP_NET_ADMIN; omitting to prevent abort" >> "$LOG_FILE"
+    fi
   fi
 
-  # Reconnect
+  # Quick reconnect
   if [[ "$QUICK_RECONNECT" == "1" ]]; then
     args+=("--quick-reconnect")
   else
@@ -272,17 +329,36 @@ build_args() {
   printf '%s\n' "${args[@]}"
 }
 
+rotate_logs_if_needed() {
+  if [[ -f "$LOG_FILE" ]]; then
+    local size
+    size=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
+    if (( size > 2097152 )); then # 2MB
+      mv "$LOG_FILE" "${LOG_FILE}.old"
+    fi
+  fi
+}
+
 cmd_status() {
   local bin=""
   bin=$(detect_aether_bin || true)
   local installed="false"
+  local bin_version=""
+  local has_cap="false"
+
   if [[ -n "$bin" ]]; then
     installed="true"
+    bin_version=$(get_binary_version "$bin")
+    if has_cap_net_admin "$bin"; then
+      has_cap="true"
+    fi
   fi
 
   local running="false"
+  local pid=""
   if is_running; then
     running="true"
+    pid=$(get_running_pid || true)
   fi
 
   local system_proxy="false"
@@ -309,11 +385,26 @@ cmd_status() {
     fi
   fi
 
+  # Gather discovered cores
+  local cores_json="[]"
+  local core_list=()
+  while IFS= read -r c; do
+    [[ -n "$c" ]] || continue
+    core_list+=("\"$c\"")
+  done < <(find_all_cores)
+
+  if (( ${#core_list[@]} > 0 )); then
+    cores_json="[ $(IFS=,; echo "${core_list[*]}") ]"
+  fi
+
   cat <<EOF
 {
   "installed": $installed,
   "binary": "$bin",
+  "binary_version": "$bin_version",
+  "has_cap_net_admin": $has_cap,
   "running": $running,
+  "pid": "${pid:-}",
   "connected": $connected,
   "ip": "${ip:-}",
   "colo": "${colo:-}",
@@ -321,6 +412,7 @@ cmd_status() {
   "warp": "${warp:-}",
   "latency_ms": ${latency:-0},
   "proxy_port": $SOCKS_PORT,
+  "http_proxy_port": $HTTP_PROXY_PORT,
   "system_proxy": $system_proxy,
   "protocol": "$PROTOCOL",
   "scan": "$SCAN",
@@ -328,7 +420,9 @@ cmd_status() {
   "ip_mode": "$IP_MODE",
   "h2": $( [[ "$H2" == "1" ]] && echo "true" || echo "false" ),
   "fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
-  "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" )
+  "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" ),
+  "mark_enabled": $( [[ "$MARK" == "1" || "$MARK" == "0xff" ]] && echo "true" || echo "false" ),
+  "discovered_cores": $cores_json
 }
 EOF
 }
@@ -341,47 +435,95 @@ cmd_start() {
 
   local bin
   bin=$(detect_aether_bin) || {
-    echo "Aether binary not found. Please install Aether first." >&2
+    echo "Aether core not found. Please click 'Install Aether' or specify a custom binary path." >&2
     return 1
   }
 
-  local workdir
-  workdir=$(dirname "$bin")
+  rotate_logs_if_needed
 
-  mapfile -t ARGS < <(build_args)
+  mapfile -t ARGS < <(build_args "$bin")
 
-  # Check if running via user systemd service or background process
-  if has_systemd_service; then
+  echo "[$(date -Iseconds)] Launching $bin ${ARGS[*]}" >> "$LOG_FILE"
+
+  # Start via systemd service if available and configured
+  if has_systemd_service && systemctl --user is-enabled --quiet aether 2>/dev/null; then
     systemctl --user start aether
-    echo "Started via systemd service."
-    return 0
-  fi
-
-  # Direct background start
-  (cd "$workdir" && nohup "$bin" "${ARGS[@]}" > "$LOG_FILE" 2>&1 & echo $! > "$PID_FILE")
-  echo "Started Aether (PID $(cat "$PID_FILE"))."
-}
-
-cmd_stop() {
-  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
-    systemctl --user stop aether
-  fi
-
-  if [[ -f "$PID_FILE" ]]; then
-    local pid
-    pid=$(cat "$PID_FILE" 2>/dev/null || true)
-    if [[ -n "$pid" ]]; then
-      kill "$pid" 2>/dev/null || true
-      rm -f "$PID_FILE"
+    sleep 1
+    if systemctl --user is-active --quiet aether; then
+      echo "Started via systemd service."
+      return 0
     fi
   fi
 
-  # Ensure all instances of cluvex aether are stopped
-  local pids
-  pids=$(pgrep -f "aether.*(--mark|--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
-  if [[ -n "$pids" ]]; then
-    # shellcheck disable=SC2086
-    kill $pids 2>/dev/null || true
+  # Start in background with dedicated user data directory and separate process group
+  cd "$RUN_DIR"
+  setsid "$bin" "${ARGS[@]}" </dev/null >>"$LOG_FILE" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$PID_FILE"
+  disown "$pid"
+  if [[ -z "$pid" ]]; then
+    echo "Failed to obtain process PID." >&2
+    return 1
+  fi
+
+  # Verification window: ensure it didn't exit immediately due to error
+  sleep 1.2
+  if ! kill -0 "$pid" 2>/dev/null; then
+    local err
+    err=$(tail -n 6 "$LOG_FILE" 2>/dev/null | grep -iE "error|denied|failed|cannot" | head -n1 || true)
+    if [[ -z "$err" ]]; then
+      err=$(tail -n 2 "$LOG_FILE" 2>/dev/null | head -n1 || true)
+    fi
+    rm -f "$PID_FILE"
+    echo "Process failed to start: ${err:-unknown error}" >&2
+    return 1
+  fi
+
+  echo "Started Aether (PID $pid)."
+}
+
+cmd_stop() {
+  local stopped="false"
+
+  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
+    systemctl --user stop aether
+    stopped="true"
+  fi
+
+  local pid
+  pid=$(get_running_pid || true)
+
+  if [[ -n "$pid" ]]; then
+    # Graceful shutdown (SIGINT lets Aether save state and close tunnel)
+    kill -INT "$pid" 2>/dev/null || true
+    for _ in {1..25}; do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        stopped="true"
+        break
+      fi
+      sleep 0.1
+    done
+
+    # If still alive, escalate to SIGTERM
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null || true
+      sleep 0.5
+    fi
+
+    # Force kill if still hung
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+    stopped="true"
+  fi
+
+  rm -f "$PID_FILE"
+
+  # Clean up any rogue instances
+  local rogue
+  rogue=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  if [[ -n "$rogue" ]]; then
+    kill -KILL "$rogue" 2>/dev/null || true
   fi
 
   echo "Stopped Aether."
@@ -389,7 +531,7 @@ cmd_stop() {
 
 cmd_restart() {
   cmd_stop
-  sleep 1
+  sleep 0.8
   cmd_start
 }
 
@@ -416,37 +558,40 @@ cmd_install() {
       ;;
   esac
 
-  local target_dir="$DATA_DIR/bin"
-  mkdir -p "$target_dir"
+  mkdir -p "$BIN_DIR"
   local tar_name="aether-linux-${release_arch}.tar.gz"
   local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${tar_name}"
   local tmp_file="/tmp/${tar_name}"
 
   echo "Downloading Aether ($release_arch) from $url..."
 
-  # Attempt download directly or fallback to curl with current socks proxy if available
-  if ! curl -fsSL "$url" -o "$tmp_file"; then
-    if curl -fsSL -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
-      echo "Downloaded via fallback proxy."
+  if ! curl -fsSL -m 30 "$url" -o "$tmp_file"; then
+    # Fallback to local SOCKS proxy if already connected through another tunnel
+    if curl -fsSL -m 30 -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
+      echo "Downloaded via proxy fallback."
     else
       echo "Failed to download Aether release archive from GitHub." >&2
       return 1
     fi
   fi
 
-  echo "Extracting to $target_dir..."
-  tar -xzf "$tmp_file" -C "$target_dir"
-  chmod +x "$target_dir/aether"
+  echo "Extracting binary..."
+  tar -xzf "$tmp_file" -C "$BIN_DIR"
+  chmod +x "$BIN_DIR/aether"
   rm -f "$tmp_file"
 
-  echo "Aether installed successfully to $target_dir/aether"
-
-  # Attempt capability setting if possible (allows --mark 0xff without sudo)
-  if command -v setcap &>/dev/null; then
-    if sudo -n setcap cap_net_admin+ep "$target_dir/aether" 2>/dev/null; then
-      echo "Configured CAP_NET_ADMIN capability."
-    fi
+  # Also fetch pluggable transports (pt/) if available
+  local pt_tar="pt-linux-${release_arch}.tar.gz"
+  local pt_url="https://github.com/CluvexStudio/Aether/releases/latest/download/${pt_tar}"
+  if curl -fsSL -m 15 "$pt_url" -o "/tmp/$pt_tar" 2>/dev/null; then
+    tar -xzf "/tmp/$pt_tar" -C "$BIN_DIR" 2>/dev/null || true
+    rm -f "/tmp/$pt_tar"
   fi
+
+  CUSTOM_BIN="$BIN_DIR/aether"
+  save_config
+
+  echo "Aether installed successfully to $BIN_DIR/aether"
 }
 
 cmd_set_config() {
@@ -456,6 +601,13 @@ cmd_set_config() {
   [[ -n "$key" ]] || { echo "Key required" >&2; return 1; }
 
   case "$key" in
+    bin)
+      if [[ -n "$val" ]] && ! is_cluvex_aether "$val"; then
+        echo "Error: '$val' is not a valid executable Aether binary." >&2
+        return 1
+      fi
+      CUSTOM_BIN="$val"
+      ;;
     protocol) PROTOCOL="$val" ;;
     scan) SCAN="$val" ;;
     noize) NOIZE="$val" ;;
@@ -475,6 +627,27 @@ cmd_set_config() {
 
   save_config
   echo "Updated $key=$val"
+}
+
+cmd_logs() {
+  local lines="${1:-50}"
+  if [[ -f "$LOG_FILE" ]]; then
+    tail -n "$lines" "$LOG_FILE"
+  else
+    echo "No log file found at $LOG_FILE"
+  fi
+}
+
+cmd_clear_logs() {
+  if [[ -f "$LOG_FILE" ]]; then
+    truncate -s 0 "$LOG_FILE"
+    echo "Logs cleared."
+  fi
+}
+
+cmd_clear_cache() {
+  rm -f "$RUN_DIR"/*lastconn* "$RUN_DIR"/*secondary*
+  echo "Connection cache cleared. Next start will perform a full scan."
 }
 
 case "${1:-status}" in
@@ -500,6 +673,18 @@ case "${1:-status}" in
     shift
     cmd_set_config "$@"
     ;;
+  cores|list-cores)
+    cmd_status | jq '.discovered_cores'
+    ;;
+  logs)
+    cmd_logs "${2:-50}"
+    ;;
+  clear-logs)
+    cmd_clear_logs
+    ;;
+  clear-cache)
+    cmd_clear_cache
+    ;;
   proxy)
     set_system_proxy "${2:-toggle}"
     if is_system_proxy_on; then
@@ -512,7 +697,7 @@ case "${1:-status}" in
     probe_trace "$SOCKS_PORT"
     ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|proxy [on|off|toggle]|probe}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|logs [N]|clear-logs|clear-cache|proxy [on|off|toggle]|probe}"
     exit 1
     ;;
 esac

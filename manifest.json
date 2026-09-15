@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "cluvex.aether",
   "name": "Aether",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "CluvexStudio",
   "license": "MIT",
   "homepage": "https://github.com/CluvexStudio/Aether",
-  "description": "Omarchy shell plugin for Aether: censorship circumvention WARP client with MASQUE, WireGuard, nested tunneling, system proxy, and latency metrics.",
+  "description": "Omarchy shell plugin for Aether: censorship circumvention WARP client with MASQUE, WireGuard, nested tunneling, system proxy, live logs, and core manager.",
   "kinds": [
     "bar-widget"
   ],
@@ -21,7 +21,9 @@
     "defaultSection": "right",
     "defaults": {
       "autoConnect": false,
-      "socksPort": 1819
+      "socksPort": 1819,
+      "httpProxyPort": 0,
+      "customBinaryPath": ""
     },
     "schema": [
       {
@@ -30,7 +32,24 @@
         "label": "SOCKS5 listen port",
         "min": 1024,
         "max": 65535,
-        "defaultValue": 1819
+        "defaultValue": 1819,
+        "description": "Port where the local SOCKS5 proxy listens (default 1819)."
+      },
+      {
+        "key": "httpProxyPort",
+        "type": "integer",
+        "label": "HTTP CONNECT proxy port",
+        "min": 0,
+        "max": 65535,
+        "defaultValue": 0,
+        "description": "Optional HTTP CONNECT proxy port (0 = disabled, e.g. 1820)."
+      },
+      {
+        "key": "customBinaryPath",
+        "type": "string",
+        "label": "Custom Aether core binary path",
+        "defaultValue": "",
+        "description": "Explicit path to the aether executable. Leave blank for auto-discovery."
       }
     ]
   }

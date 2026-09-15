@@ -9,18 +9,27 @@ Item {
 
   property var settings: ({})
 
+  // Core status
   property bool installed: false
-  property bool running: false
-  property bool connected: false
   property string binary: ""
+  property string binaryVersion: ""
+  property bool hasCapNetAdmin: false
+  property var discoveredCores: []
+  property bool running: false
+  property string pid: ""
+  property bool connected: false
+
+  // Metrics
   property string ip: ""
   property string colo: ""
   property string loc: ""
   property string warp: ""
   property int latency: 0
   property int proxyPort: 1819
+  property int httpProxyPort: 0
   property bool systemProxy: false
 
+  // Configuration
   property string protocol: "masque"
   property string scan: "balanced"
   property string noize: "firewall"
@@ -28,8 +37,12 @@ Item {
   property bool h2: false
   property bool fragment: false
   property bool quickReconnect: true
+  property bool markEnabled: false
 
+  // Logs & Operations
+  property string logsText: ""
   property bool refreshing: false
+  property bool fetchingLogs: false
   property bool installing: false
   property bool actionInProgress: false
   property string actionStatus: ""
@@ -38,7 +51,7 @@ Item {
 
   readonly property string ctlPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl"
   readonly property string heroPhrase: Model.getHeroPhrase(phraseIndex)
-  readonly property string statusSummary: !installed ? "Aether not installed" : (!running ? "Disconnected" : (connected ? "Protected · " + Model.formatColo(colo, loc) : "Connecting…"))
+  readonly property string statusSummary: !installed ? "Aether core not found" : (!running ? "Disconnected" : (connected ? "Connected · " + Model.formatColo(colo, loc) : "Connecting to WARP…"))
 
   function refresh() {
     if (statusProcess.running) return
@@ -48,20 +61,28 @@ Item {
     statusProcess.running = true
   }
 
+  function fetchLogs() {
+    if (logsProcess.running) return
+    fetchingLogs = true
+    _logsOutput = ""
+    logsProcess.command = [ctlPath, "logs", "45"]
+    logsProcess.running = true
+  }
+
   function toggleAether() {
-    runAction(["toggle"], "Toggling Aether…")
+    runAction(["toggle"], running ? "Disconnecting…" : "Connecting…")
   }
 
   function startAether() {
-    runAction(["start"], "Starting Aether…")
+    runAction(["start"], "Starting tunnel…")
   }
 
   function stopAether() {
-    runAction(["stop"], "Stopping Aether…")
+    runAction(["stop"], "Stopping tunnel…")
   }
 
   function restartAether() {
-    runAction(["restart"], "Restarting Aether…")
+    runAction(["restart"], "Restarting tunnel…")
   }
 
   function toggleSystemProxy() {
@@ -71,7 +92,7 @@ Item {
   function installAether() {
     if (installProcess.running) return
     installing = true
-    actionStatus = "Downloading and installing Aether…"
+    actionStatus = "Downloading and installing official Aether core…"
     _installOutput = ""
     installProcess.command = [ctlPath, "install"]
     installProcess.running = true
@@ -81,10 +102,24 @@ Item {
     runAction(["set", key, String(value)], "Updating setting…")
   }
 
+  function setCore(path) {
+    runAction(["set", "bin", String(path)], "Switching core binary…")
+  }
+
+  function clearLogs() {
+    runAction(["clear-logs"], "Clearing logs…")
+    logsText = ""
+  }
+
+  function clearCache() {
+    runAction(["clear-cache"], "Clearing gateway cache…")
+  }
+
   function runAction(args, statusMsg) {
     if (actionProcess.running) return
     actionInProgress = true
     actionStatus = statusMsg || "Applying…"
+    lastError = ""
     _actionOutput = ""
     var cmd = [ctlPath]
     for (var i = 0; i < args.length; i++) {
@@ -106,15 +141,26 @@ Item {
     copyToClipboard(Model.socksUrl(proxyPort), "SOCKS5 URL")
   }
 
+  function copyHttpProxyUrl() {
+    if (httpProxyPort > 0) {
+      copyToClipboard(Model.httpProxyUrl(httpProxyPort), "HTTP Proxy URL")
+    }
+  }
+
   function copyExportEnv() {
-    copyToClipboard(Model.exportEnv(proxyPort), "environment export")
+    copyToClipboard(Model.exportEnv(proxyPort), "environment variables")
   }
 
   function copyCurlSnippet() {
     copyToClipboard(Model.curlSnippet(proxyPort), "curl command")
   }
 
+  function copyAllLogs() {
+    copyToClipboard(logsText, "Aether logs")
+  }
+
   property string _statusOutput: ""
+  property string _logsOutput: ""
   property string _actionOutput: ""
   property string _installOutput: ""
 
@@ -131,7 +177,11 @@ Item {
         var data = Model.parseStatus(root._statusOutput)
         root.installed = data.installed
         root.binary = data.binary
+        root.binaryVersion = data.binary_version
+        root.hasCapNetAdmin = data.has_cap_net_admin
+        root.discoveredCores = data.discovered_cores
         root.running = data.running
+        root.pid = data.pid
         root.connected = data.connected
         root.ip = data.ip
         root.colo = data.colo
@@ -139,14 +189,31 @@ Item {
         root.warp = data.warp
         root.latency = data.latency_ms
         root.proxyPort = data.proxy_port
+        root.httpProxyPort = data.http_proxy_port
         root.systemProxy = data.system_proxy
-        if (data.protocol) root.protocol = data.protocol
-        if (data.scan) root.scan = data.scan
-        if (data.noize) root.noize = data.noize
-        if (data.ip_mode) root.ipMode = data.ip_mode
-        root.h2 = data.h2 === true
-        root.fragment = data.fragment === true
-        root.quickReconnect = data.quick_reconnect === true
+        root.protocol = data.protocol
+        root.scan = data.scan
+        root.noize = data.noize
+        root.ipMode = data.ip_mode
+        root.h2 = data.h2
+        root.fragment = data.fragment
+        root.quickReconnect = data.quick_reconnect
+        root.markEnabled = data.mark_enabled
+      }
+    }
+  }
+
+  Process {
+    id: logsProcess
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._logsOutput += line + "\n"
+      }
+    }
+    onExited: function(code) {
+      root.fetchingLogs = false
+      if (code === 0) {
+        root.logsText = Model.cleanLogLines(root._logsOutput.trim())
       }
     }
   }
@@ -158,15 +225,22 @@ Item {
         root._actionOutput += line
       }
     }
+    stderr: SplitParser {
+      onRead: function(line) {
+        root.lastError += line
+      }
+    }
     onExited: function(code) {
       root.actionInProgress = false
       if (code === 0) {
-        root.actionStatus = root._actionOutput.trim()
+        var out = root._actionOutput.trim()
+        if (out.length > 0) root.actionStatus = out
         resetStatusTimer.restart()
       } else {
-        root.lastError = "Action failed"
+        if (root.lastError === "") root.lastError = root._actionOutput.trim() || "Operation failed"
       }
       root.refresh()
+      root.fetchLogs()
     }
   }
 
@@ -180,10 +254,10 @@ Item {
     onExited: function(code) {
       root.installing = false
       if (code === 0) {
-        root.actionStatus = "Installation successful!"
+        root.actionStatus = "Installation complete! Core ready."
         resetStatusTimer.restart()
       } else {
-        root.lastError = "Installation failed. Check internet connection."
+        root.lastError = "Install failed. Check internet connection."
       }
       root.refresh()
     }
@@ -191,15 +265,17 @@ Item {
 
   Timer {
     id: pollTimer
-    interval: root.running ? 8000 : 20000
+    interval: root.running ? 6000 : 15000
     running: true
     repeat: true
-    onTriggered: root.refresh()
+    onTriggered: {
+      root.refresh()
+    }
   }
 
   Timer {
     id: phraseTimer
-    interval: 6000
+    interval: 5000
     running: root.connected
     repeat: true
     onTriggered: root.phraseIndex = (root.phraseIndex + 1) % Model.activePhrases.length
@@ -207,12 +283,13 @@ Item {
 
   Timer {
     id: resetStatusTimer
-    interval: 3500
+    interval: 4000
     repeat: false
     onTriggered: root.actionStatus = ""
   }
 
   Component.onCompleted: {
     refresh()
+    fetchLogs()
   }
 }
