@@ -21,6 +21,16 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color barIconColor: aether.connected ? accent : (aether.running ? foreground : dim)
 
+  readonly property string icon: {
+    if (!aether.installed || aether.lastError !== "") return "\uDB80\uDC28"
+    if (!aether.running) return "\uDB80\uDC84"
+    if (aether.connected) return "\uDB85\uDEB5"
+    return "\uDB80\uDC83"
+  }
+
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
   Service {
     id: aether
     settings: root.settings
@@ -45,23 +55,10 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
+    text: root.icon
+    active: aether.connected
+    activeColor: root.accent
     tooltipText: aether.statusSummary
-
-    iconComponent: Component {
-      Item {
-        AetherIcon {
-          anchors.centerIn: parent
-          iconSize: Style.space(13)
-          color: root.barIconColor
-          accentColor: root.accent
-          badgeColor: root.urgent
-          active: aether.connected
-          connecting: aether.running && !aether.connected
-          crossed: !aether.running
-          warning: !aether.installed || aether.lastError !== ""
-        }
-      }
-    }
 
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) {
