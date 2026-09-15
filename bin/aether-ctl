@@ -1,0 +1,518 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-aether"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-aether"
+CONFIG_FILE="$CONFIG_DIR/config.env"
+PID_FILE="$CONFIG_DIR/aether.pid"
+LOG_FILE="$CONFIG_DIR/aether.log"
+
+mkdir -p "$CONFIG_DIR" "$DATA_DIR/bin"
+
+# Defaults
+DEFAULT_PROTOCOL="masque"
+DEFAULT_SCAN="balanced"
+DEFAULT_NOIZE="firewall"
+DEFAULT_IP="v4"
+DEFAULT_SOCKS_PORT=1819
+DEFAULT_HTTP_PROXY_PORT=0
+DEFAULT_MARK="0xff"
+DEFAULT_QUICK_RECONNECT=1
+DEFAULT_H2=0
+DEFAULT_FRAGMENT=0
+DEFAULT_EXTRA_ARGS=""
+
+load_config() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+  fi
+
+  PROTOCOL="${AETHER_CFG_PROTOCOL:-$DEFAULT_PROTOCOL}"
+  SCAN="${AETHER_CFG_SCAN:-$DEFAULT_SCAN}"
+  NOIZE="${AETHER_CFG_NOIZE:-$DEFAULT_NOIZE}"
+  IP_MODE="${AETHER_CFG_IP:-$DEFAULT_IP}"
+  SOCKS_PORT="${AETHER_CFG_SOCKS_PORT:-$DEFAULT_SOCKS_PORT}"
+  HTTP_PROXY_PORT="${AETHER_CFG_HTTP_PROXY_PORT:-$DEFAULT_HTTP_PROXY_PORT}"
+  MARK="${AETHER_CFG_MARK:-$DEFAULT_MARK}"
+  QUICK_RECONNECT="${AETHER_CFG_QUICK_RECONNECT:-$DEFAULT_QUICK_RECONNECT}"
+  H2="${AETHER_CFG_H2:-$DEFAULT_H2}"
+  FRAGMENT="${AETHER_CFG_FRAGMENT:-$DEFAULT_FRAGMENT}"
+  EXTRA_ARGS="${AETHER_CFG_EXTRA_ARGS:-$DEFAULT_EXTRA_ARGS}"
+}
+
+save_config() {
+  cat > "$CONFIG_FILE" <<EOF
+AETHER_CFG_PROTOCOL="${PROTOCOL}"
+AETHER_CFG_SCAN="${SCAN}"
+AETHER_CFG_NOIZE="${NOIZE}"
+AETHER_CFG_IP="${IP_MODE}"
+AETHER_CFG_SOCKS_PORT="${SOCKS_PORT}"
+AETHER_CFG_HTTP_PROXY_PORT="${HTTP_PROXY_PORT}"
+AETHER_CFG_MARK="${MARK}"
+AETHER_CFG_QUICK_RECONNECT="${QUICK_RECONNECT}"
+AETHER_CFG_H2="${H2}"
+AETHER_CFG_FRAGMENT="${FRAGMENT}"
+AETHER_CFG_EXTRA_ARGS="${EXTRA_ARGS}"
+EOF
+}
+
+load_config
+
+is_cluvex_aether() {
+  local candidate="$1"
+  [[ -x "$candidate" ]] || return 1
+  # Exclude desktop theme generator or false matches
+  if "$candidate" --help 2>&1 | grep -iq "socks5"; then
+    return 0
+  fi
+  return 1
+}
+
+detect_aether_bin() {
+  if [[ -n "${AETHER_BIN:-}" ]] && is_cluvex_aether "$AETHER_BIN"; then
+    echo "$AETHER_BIN"
+    return 0
+  fi
+
+  local candidates=(
+    "$DATA_DIR/bin/aether"
+    "$PLUGIN_ROOT/bin/aether"
+    "$HOME/Downloads/Aether/aether"
+    "$HOME/.local/bin/aether"
+    "/usr/local/bin/aether"
+    "/opt/aether/aether"
+  )
+
+  for cand in "${candidates[@]}"; do
+    if is_cluvex_aether "$cand"; then
+      echo "$cand"
+      return 0
+    fi
+  done
+
+  # Search PATH
+  while IFS= read -r cand; do
+    if [[ -n "$cand" ]] && is_cluvex_aether "$cand"; then
+      echo "$cand"
+      return 0
+    fi
+  done < <(which -a aether 2>/dev/null || true)
+
+  return 1
+}
+
+has_systemd_service() {
+  systemctl --user list-unit-files aether.service &>/dev/null
+}
+
+is_running() {
+  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
+    return 0
+  fi
+
+  if [[ -f "$PID_FILE" ]]; then
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  # Fallback: check pgrep for running aether WARP instance
+  local pids
+  pids=$(pgrep -f "aether.*(--mark|--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+is_system_proxy_on() {
+  if ! command -v gsettings &>/dev/null; then
+    return 1
+  fi
+  local mode host port
+  mode=$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'" || true)
+  host=$(gsettings get org.gnome.system.proxy.socks host 2>/dev/null | tr -d "'" || true)
+  port=$(gsettings get org.gnome.system.proxy.socks port 2>/dev/null || true)
+
+  [[ "$mode" == "manual" && "$host" == "127.0.0.1" && "$port" == "$SOCKS_PORT" ]]
+}
+
+set_system_proxy() {
+  local target="${1:-toggle}"
+  if ! command -v gsettings &>/dev/null; then
+    echo "gsettings not available" >&2
+    return 1
+  fi
+
+  if [[ "$target" == "toggle" ]]; then
+    if is_system_proxy_on; then
+      target="off"
+    else
+      target="on"
+    fi
+  fi
+
+  if [[ "$target" == "on" ]]; then
+    gsettings set org.gnome.system.proxy.socks host '127.0.0.1'
+    gsettings set org.gnome.system.proxy.socks port "$SOCKS_PORT"
+    gsettings set org.gnome.system.proxy mode 'manual'
+  else
+    gsettings set org.gnome.system.proxy mode 'none'
+  fi
+}
+
+probe_trace() {
+  local port="${1:-$SOCKS_PORT}"
+  local start_time end_time elapsed_ms
+  start_time=$(date +%s%N)
+  local trace
+  trace=$(curl -s --connect-timeout 2 -m 4 -x "socks5h://127.0.0.1:${port}" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
+  end_time=$(date +%s%N)
+
+  if [[ -z "$trace" || "$trace" != *"warp="* ]]; then
+    return 1
+  fi
+
+  elapsed_ms=$(( (end_time - start_time) / 1000000 ))
+  echo "$trace"
+  echo "latency_ms=$elapsed_ms"
+}
+
+build_args() {
+  local args=()
+
+  # Protocol selection
+  case "$PROTOCOL" in
+    masque)
+      args+=("--masque")
+      if [[ "$H2" == "1" ]]; then
+        args+=("--h2")
+        if [[ "$FRAGMENT" == "1" ]]; then
+          args+=("--fragment")
+        fi
+      fi
+      ;;
+    wg)
+      args+=("--wg")
+      ;;
+    gool)
+      args+=("--gool")
+      ;;
+    mim)
+      args+=("--mim")
+      if [[ "$H2" == "1" ]]; then
+        args+=("--h2")
+      fi
+      ;;
+    tor)
+      args+=("--masque" "--tor")
+      ;;
+    tor-reverse)
+      args+=("--tor-reverse")
+      ;;
+    tor-only)
+      args+=("--tor-only")
+      ;;
+    *)
+      args+=("--masque")
+      ;;
+  esac
+
+  # Scan mode
+  if [[ -n "$SCAN" ]]; then
+    args+=("--scan" "$SCAN")
+  fi
+
+  # Obfuscation
+  if [[ -n "$NOIZE" ]]; then
+    args+=("--noize" "$NOIZE")
+  fi
+
+  # IP version
+  case "$IP_MODE" in
+    v4) args+=("-4") ;;
+    v6) args+=("-6") ;;
+    dual) args+=("--dual") ;;
+  esac
+
+  # SOCKS5 bind
+  args+=("--bind" "127.0.0.1:${SOCKS_PORT}")
+
+  # HTTP Connect proxy
+  if [[ "$HTTP_PROXY_PORT" != "0" && -n "$HTTP_PROXY_PORT" ]]; then
+    args+=("--http-proxy" "127.0.0.1:${HTTP_PROXY_PORT}")
+  fi
+
+  # Mark (firewall mark)
+  if [[ -n "$MARK" ]]; then
+    args+=("--mark" "$MARK")
+  fi
+
+  # Reconnect
+  if [[ "$QUICK_RECONNECT" == "1" ]]; then
+    args+=("--quick-reconnect")
+  else
+    args+=("--no-quick-reconnect")
+  fi
+
+  # Extra custom arguments
+  if [[ -n "$EXTRA_ARGS" ]]; then
+    # shellcheck disable=SC2206
+    local extra=($EXTRA_ARGS)
+    args+=("${extra[@]}")
+  fi
+
+  printf '%s\n' "${args[@]}"
+}
+
+cmd_status() {
+  local bin=""
+  bin=$(detect_aether_bin || true)
+  local installed="false"
+  if [[ -n "$bin" ]]; then
+    installed="true"
+  fi
+
+  local running="false"
+  if is_running; then
+    running="true"
+  fi
+
+  local system_proxy="false"
+  if is_system_proxy_on; then
+    system_proxy="true"
+  fi
+
+  local connected="false"
+  local ip=""
+  local colo=""
+  local loc=""
+  local warp=""
+  local latency=0
+
+  if [[ "$running" == "true" ]]; then
+    local trace_output
+    if trace_output=$(probe_trace "$SOCKS_PORT"); then
+      connected="true"
+      ip=$(echo "$trace_output" | awk -F= '$1=="ip"{print $2}')
+      colo=$(echo "$trace_output" | awk -F= '$1=="colo"{print $2}')
+      loc=$(echo "$trace_output" | awk -F= '$1=="loc"{print $2}')
+      warp=$(echo "$trace_output" | awk -F= '$1=="warp"{print $2}')
+      latency=$(echo "$trace_output" | awk -F= '$1=="latency_ms"{print $2}')
+    fi
+  fi
+
+  cat <<EOF
+{
+  "installed": $installed,
+  "binary": "$bin",
+  "running": $running,
+  "connected": $connected,
+  "ip": "${ip:-}",
+  "colo": "${colo:-}",
+  "loc": "${loc:-}",
+  "warp": "${warp:-}",
+  "latency_ms": ${latency:-0},
+  "proxy_port": $SOCKS_PORT,
+  "system_proxy": $system_proxy,
+  "protocol": "$PROTOCOL",
+  "scan": "$SCAN",
+  "noize": "$NOIZE",
+  "ip_mode": "$IP_MODE",
+  "h2": $( [[ "$H2" == "1" ]] && echo "true" || echo "false" ),
+  "fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
+  "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" )
+}
+EOF
+}
+
+cmd_start() {
+  if is_running; then
+    echo "Aether is already running."
+    return 0
+  fi
+
+  local bin
+  bin=$(detect_aether_bin) || {
+    echo "Aether binary not found. Please install Aether first." >&2
+    return 1
+  }
+
+  local workdir
+  workdir=$(dirname "$bin")
+
+  mapfile -t ARGS < <(build_args)
+
+  # Check if running via user systemd service or background process
+  if has_systemd_service; then
+    systemctl --user start aether
+    echo "Started via systemd service."
+    return 0
+  fi
+
+  # Direct background start
+  (cd "$workdir" && nohup "$bin" "${ARGS[@]}" > "$LOG_FILE" 2>&1 & echo $! > "$PID_FILE")
+  echo "Started Aether (PID $(cat "$PID_FILE"))."
+}
+
+cmd_stop() {
+  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
+    systemctl --user stop aether
+  fi
+
+  if [[ -f "$PID_FILE" ]]; then
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null || true)
+    if [[ -n "$pid" ]]; then
+      kill "$pid" 2>/dev/null || true
+      rm -f "$PID_FILE"
+    fi
+  fi
+
+  # Ensure all instances of cluvex aether are stopped
+  local pids
+  pids=$(pgrep -f "aether.*(--mark|--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null || true
+  fi
+
+  echo "Stopped Aether."
+}
+
+cmd_restart() {
+  cmd_stop
+  sleep 1
+  cmd_start
+}
+
+cmd_toggle() {
+  if is_running; then
+    cmd_stop
+  else
+    cmd_start
+  fi
+}
+
+cmd_install() {
+  local arch
+  arch=$(uname -m)
+  local release_arch=""
+
+  case "$arch" in
+    x86_64)  release_arch="x86_64" ;;
+    aarch64|arm64) release_arch="arm64" ;;
+    armv7l)  release_arch="armv7" ;;
+    *)
+      echo "Unsupported architecture: $arch" >&2
+      return 1
+      ;;
+  esac
+
+  local target_dir="$DATA_DIR/bin"
+  mkdir -p "$target_dir"
+  local tar_name="aether-linux-${release_arch}.tar.gz"
+  local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${tar_name}"
+  local tmp_file="/tmp/${tar_name}"
+
+  echo "Downloading Aether ($release_arch) from $url..."
+
+  # Attempt download directly or fallback to curl with current socks proxy if available
+  if ! curl -fsSL "$url" -o "$tmp_file"; then
+    if curl -fsSL -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
+      echo "Downloaded via fallback proxy."
+    else
+      echo "Failed to download Aether release archive from GitHub." >&2
+      return 1
+    fi
+  fi
+
+  echo "Extracting to $target_dir..."
+  tar -xzf "$tmp_file" -C "$target_dir"
+  chmod +x "$target_dir/aether"
+  rm -f "$tmp_file"
+
+  echo "Aether installed successfully to $target_dir/aether"
+
+  # Attempt capability setting if possible (allows --mark 0xff without sudo)
+  if command -v setcap &>/dev/null; then
+    if sudo -n setcap cap_net_admin+ep "$target_dir/aether" 2>/dev/null; then
+      echo "Configured CAP_NET_ADMIN capability."
+    fi
+  fi
+}
+
+cmd_set_config() {
+  local key="${1:-}"
+  local val="${2:-}"
+
+  [[ -n "$key" ]] || { echo "Key required" >&2; return 1; }
+
+  case "$key" in
+    protocol) PROTOCOL="$val" ;;
+    scan) SCAN="$val" ;;
+    noize) NOIZE="$val" ;;
+    ip) IP_MODE="$val" ;;
+    socks_port) SOCKS_PORT="$val" ;;
+    http_proxy_port) HTTP_PROXY_PORT="$val" ;;
+    mark) MARK="$val" ;;
+    quick_reconnect) QUICK_RECONNECT="$val" ;;
+    h2) H2="$val" ;;
+    fragment) FRAGMENT="$val" ;;
+    extra_args) EXTRA_ARGS="$val" ;;
+    *)
+      echo "Unknown config key: $key" >&2
+      return 1
+      ;;
+  esac
+
+  save_config
+  echo "Updated $key=$val"
+}
+
+case "${1:-status}" in
+  status)
+    cmd_status
+    ;;
+  start)
+    cmd_start
+    ;;
+  stop)
+    cmd_stop
+    ;;
+  restart)
+    cmd_restart
+    ;;
+  toggle)
+    cmd_toggle
+    ;;
+  install)
+    cmd_install
+    ;;
+  set)
+    shift
+    cmd_set_config "$@"
+    ;;
+  proxy)
+    set_system_proxy "${2:-toggle}"
+    if is_system_proxy_on; then
+      echo "System proxy: on"
+    else
+      echo "System proxy: off"
+    fi
+    ;;
+  probe)
+    probe_trace "$SOCKS_PORT"
+    ;;
+  *)
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|proxy [on|off|toggle]|probe}"
+    exit 1
+    ;;
+esac

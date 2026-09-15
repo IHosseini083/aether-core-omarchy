@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "cluvex.aether",
+  "name": "Aether",
+  "version": "1.0.0",
+  "author": "CluvexStudio",
+  "license": "MIT",
+  "homepage": "https://github.com/CluvexStudio/Aether",
+  "description": "Omarchy shell plugin for Aether: censorship circumvention WARP client with MASQUE, WireGuard, nested tunneling, system proxy, and latency metrics.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Aether",
+    "description": "Monitor and control the Aether censorship circumvention tunnel directly from your Omarchy bar.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "autoConnect": false,
+      "socksPort": 1819
+    },
+    "schema": [
+      {
+        "key": "socksPort",
+        "type": "integer",
+        "label": "SOCKS5 listen port",
+        "min": 1024,
+        "max": 65535,
+        "defaultValue": 1819
+      }
+    ]
+  }
+}

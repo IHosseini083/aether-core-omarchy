@@ -1,0 +1,15 @@
+[Unit]
+Description=Aether Censorship Circumvention Core
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Downloads/Aether
+ExecStart=%h/Downloads/Aether/aether --mark 0xff
+Restart=on-failure
+RestartSec=3s
+Environment=RUST_LOG=info
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=default.target
