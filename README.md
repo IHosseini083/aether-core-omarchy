@@ -1,5 +1,12 @@
 # Aether — Omarchy Shell Plugin
-[![Built for Omarchy: Plugin](https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg)](https://github.com/tcballard/omarchy-badges)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/IHosseini083/aether-core-omarchy/main/preview.png" alt="Aether Omarchy shell plugin — popup control panel" width="550" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/tcballard/omarchy-badges"><img src="https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg" alt="Built for Omarchy: Plugin" /></a>
+</p>
 
 An [Omarchy](https://omarchy.org/) status bar widget and popup panel for controlling the [Aether](https://github.com/CluvexStudio/Aether) tunnel — a userspace Cloudflare WARP client built by [CluvexStudio](https://github.com/CluvexStudio) for heavily censored networks.
 
@@ -47,7 +54,7 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 
 ## Install
 
-Once the plugin repository is published, install it with (replace the URL with the actual repository):
+Install with:
 
 ```sh
 omarchy plugin add https://github.com/IHosseini083/aether-core-omarchy.git --enable

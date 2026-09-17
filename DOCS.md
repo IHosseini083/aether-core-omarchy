@@ -164,8 +164,8 @@ Per the [Omarchy publishing guide](https://plugins.omarchy.org/publish.html) and
 - [x] `README.md` with install, usage, requirements, security notes
 - [x] `LICENSE` (MIT)
 - [x] Safe install and removal (no root, documented teardown)
-- [ ] Public GitHub repository under the owner's account
-- [ ] Optional `preview.png` screenshot in the root
+- [x] Public GitHub repository under the owner's account (`https://github.com/IHosseini083/aether-core-omarchy`)
+- [x] Optional `preview.png` screenshot in the root (referenced from `README.md`, centered, with the badge beneath it)
 - [ ] Submit via the [marketplace issue form](https://github.com/omacom/omarchy-plugin-marketplace/issues/new?template=submit-plugin.yml)
 
 The plugin `id` is `cluvex.aether` — historical (named after the upstream core) and kept for upgrade compatibility; the `author` field correctly credits the plugin author. Third-party IDs cannot use the `omarchy.*` namespace.
