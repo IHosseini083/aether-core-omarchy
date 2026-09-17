@@ -1,15 +1,13 @@
 [Unit]
-Description=Aether Censorship Circumvention Core
-After=network.target
+Description=Aether censorship circumvention tunnel (omarchy-aether plugin)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/Downloads/Aether
-ExecStart=%h/Downloads/Aether/aether --mark 0xff
+ExecStart=%h/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl foreground
 Restart=on-failure
-RestartSec=3s
-Environment=RUST_LOG=info
-AmbientCapabilities=CAP_NET_ADMIN
+RestartSec=3
 
 [Install]
 WantedBy=default.target

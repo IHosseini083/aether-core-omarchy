@@ -1,4 +1,11 @@
 *.log
+*.log.old
 *.pid
 .DS_Store
 aether
+config.env
+.env
+.env.*
+/data/
+/pt/
+aether-*.tar.gz

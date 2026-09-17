@@ -1,106 +1,143 @@
-# Aether Plugin for Omarchy Shell
+[![Built for Omarchy: Plugin](https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg)](https://github.com/tcballard/omarchy-badges)
 
-An [Omarchy](https://omarchy.org/) status bar and quick control plugin for [Aether](https://github.com/CluvexStudio/Aether) — a Rust userspace WARP core built for heavily restricted and censored networks.
+# Aether — Omarchy Shell Plugin
 
-![Aether Omarchy Bar Widget](preview.png)
+An [Omarchy](https://omarchy.org/) status bar widget and popup panel for controlling the [Aether](https://github.com/CluvexStudio/Aether) tunnel — a userspace Cloudflare WARP client built by [CluvexStudio](https://github.com/CluvexStudio) for heavily censored networks.
 
----
+The plugin is written and maintained by **iliya**. It is an independent companion tool and is **not** affiliated with CluvexStudio; Aether itself is a separate project with its own repository and licensing.
+
+The plugin talks to the Aether core through `bin/aether-ctl`. It can download the official core for you, switch between cores found on your system, and surface the daemon's live output — all from the Omarchy bar, with no root required for normal use.
+
+Full reference documentation lives in [DOCS.md](DOCS.md).
 
 ## Features
 
-- **Status Bar Indicator:**
-  - Real-time tunnel state (Connected, Connecting, Disconnected, or Error).
-  - Left-click to toggle the popup control panel.
-  - Right-click for instant connect / disconnect toggle.
-  - Middle-click to force refresh connection metrics.
-- **Connection Details & Live Metrics:**
-  - Cloudflare Colo gateway (e.g. `FRA`, `AMS`) and exit country.
-  - Live round-trip latency (ping ms).
-  - Assigned WARP Exit IP address.
-  - Local SOCKS5 proxy port (`127.0.0.1:1819`).
-- **Complete Protocol & Scan Presets:**
-  - Protocols: **MASQUE** (HTTP/3 QUIC), **MASQUE HTTP/2**, **WireGuard**, **Gool** (WARP-in-WARP), **MIM** (MASQUE-in-MASQUE), and **Tor**.
-  - Scan Profiles: **Balanced**, **Turbo**, **Thorough**, and **Ironclad** (data-plane validated).
-  - Obfuscation / Noize: **Firewall**, **GFW**, **Aggressive**, and **Off**.
-- **System Proxy Integration:**
-  - Toggle GNOME / desktop system proxy with a single click to route all browser and system apps through Aether without per-app configuration.
-- **Quick Copy Actions:**
-  - One-click copy for SOCKS5 URL (`socks5h://127.0.0.1:1819`).
-  - One-click copy for shell environment variables (`export all_proxy=...`).
-  - One-click copy for `curl` connectivity test command.
-- **Self-Contained & Automated Setup:**
-  - If the `aether` binary is not found on your system, the plugin provides a one-click installer that automatically downloads the latest official release for your architecture (`x86_64`, `arm64`, `armv7`).
+**Bar widget**
 
----
+- Status-aware shield icon: filled when connected, pulsing while connecting, slashed when disconnected, warning badge when the core is missing.
+- Left-click opens the control panel, right-click connects/disconnects, middle-click forces a refresh.
 
-## Installation
+**Popup panel — Tunnel tab**
 
-### Method 1: Using the Omarchy CLI (Recommended)
+- Gateway (Cloudflare colo + country), round-trip latency, WARP exit IP, and local SOCKS5 address.
+- One-click connect/disconnect.
+- Transport presets: **MASQUE** (HTTP/3), **MASQUE HTTP/2**, **WireGuard**, **Gool** (WARP-in-WARP), **MIM** (MASQUE-in-MASQUE).
+- Scan mode and obfuscation (noize) profile selectors covering all upstream values.
+- One-click copy of `all_proxy` exports and a `curl` test command, gateway cache clearing.
 
-Once published to GitHub:
+**Popup panel — Settings tab**
 
-```bash
-omarchy plugin add https://github.com/YOUR_USERNAME/omarchy-aether.git --enable
+- Shows the active core binary, its version, and `CAP_NET_ADMIN` status.
+- Switch between every Aether core discovered on your system, or download the latest official release from GitHub with one click.
+- IP version (IPv4 / IPv6 / dual), quick reconnect, TLS ClientHello fragmentation, Encrypted Client Hello, QUIC v2 opener, data-plane probe skip, firewall mark.
+- **Advanced section** — every remaining Aether CLI flag has a control here: forced peers (`--peer`, `--wg-peer`, `--h2-peer`), WARP-in-WARP and MASQUE-in-MASQUE endpoints, upstream proxy chaining, tunnel resolvers, routing block/direct lists, Zero Trust enrolment (team, service tokens, e-mail, gateway), all three Tor modes with bridges and pluggable transports, validation/startup/reconnect timing, WireGuard keepalive, TLS groups, resource profile, log level, and a verbatim extra-arguments escape hatch.
+
+**Popup panel — Live Logs tab**
+
+- Polls the last 100 lines of the daemon log with color-coded levels (errors, warnings, successes) and auto-tail, plus copy and clear.
+
+**Missing-core handling**
+
+- If no Aether binary is found, the panel shows a warning and offers to download and install the official release for your architecture automatically (`x86_64`, `arm64`, `armv7`), falling back to downloading through the active tunnel if GitHub is unreachable directly.
+
+## Requirements
+
+- Omarchy (Quattro shell with Quickshell) — this is an Omarchy plugin.
+- `bash`, `curl`, `jq`, `tar` — present on any Omarchy install.
+- An Aether core binary — downloaded automatically in-panel, or see [Core](#core).
+
+## Install
+
+Once the plugin repository is published, install it with (replace the URL with the actual repository):
+
+```sh
+omarchy plugin add <REPO_URL> --enable
 ```
 
-### Method 2: Manual Clone
+Manual alternative:
 
-Clone into your Omarchy plugins directory:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/omarchy-aether.git ~/.config/omarchy/plugins/cluvex.aether
+```sh
+git clone <REPO_URL> ~/.config/omarchy/plugins/cluvex.aether
 omarchy plugin enable cluvex.aether
 ```
 
----
+The plugin appears in the bar's right section. Move it with `omarchy bar move cluvex.aether --section <left|center|right>` if you like.
 
-## Recommended: Permission Setup for `--mark 0xff`
+## Core
 
-If your system uses routing rules that require the `--mark 0xff` socket firewall mark (such as with tun2socks or transparent bypasses), give the binary `CAP_NET_ADMIN` capability so it can set socket marks without requiring `sudo` or password prompts:
+The plugin controls an Aether binary; it does not ship one.
 
-```bash
-sudo setcap cap_net_admin+ep /path/to/aether
+- **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the latest official release from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/`.
+- **Custom binary:** set **Custom Aether core binary path** (or `aether-ctl set bin /path/to/aether`) to use any build, including one compiled from source.
+- **Discovery:** existing binaries are auto-detected from common locations and can be switched from the Settings tab. Detection verifies the binary is the Aether proxy (not the unrelated `aether` desktop theme generator).
+
+Verify a running tunnel yourself:
+
+```sh
+curl -x socks5h://127.0.0.1:1819 https://www.cloudflare.com/cdn-cgi/trace
 ```
 
-For the built-in downloaded binary:
+The reply should show a Cloudflare colo and `warp=on`.
 
-```bash
+## Firewall mark (`--mark`)
+
+For router-style setups (tun2socks, hev-socks5-tunnel) the core can set the `SO_MARK` firewall mark. The kernel requires `CAP_NET_ADMIN` for that, so grant it once to the binary:
+
+```sh
 sudo setcap cap_net_admin+ep ~/.local/share/omarchy-aether/bin/aether
 ```
 
-### Optional Systemd User Service
+Then enable **Firewall Mark (SO_MARK 0xff)** in the Settings tab. The plugin checks for the capability before every start and silently omits the flag if it is missing, instead of letting the core abort.
 
-You can also run Aether as a systemd user service:
+## Optional systemd user service
 
-```bash
-mkdir -p ~/.config/systemd/user/
+To have the tunnel start at login independent of the plugin:
+
+```sh
+mkdir -p ~/.config/systemd/user
 cp ~/.config/omarchy/plugins/cluvex.aether/systemd/aether.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now aether
 ```
 
----
+## IPC
 
-## IPC Commands
+Control the plugin from scripts or Hyprland keybindings:
 
-You can control Aether from scripts or Hyprland keybindings via Omarchy IPC:
-
-```bash
-# Toggle popup panel
-omarchy-shell shell summon cluvex.aether
-
-# Quick connect / disconnect
-omarchy-shell cluvex.aether toggle
-
-# Toggle desktop system proxy
-omarchy-shell cluvex.aether toggleProxy
-
-# Force status refresh
-omarchy-shell cluvex.aether refresh
+```sh
+omarchy-shell cluvex.aether toggle       # open/close the popup panel
+omarchy-shell cluvex.aether status       # one-line status summary
+omarchy-shell cluvex.aether start        # connect
+omarchy-shell cluvex.aether stop         # disconnect
+omarchy-shell cluvex.aether restart
+omarchy-shell cluvex.aether refresh      # re-probe status + logs
 ```
 
----
+## Data and file paths
+
+| Path | Purpose |
+| --- | --- |
+| `~/.local/share/omarchy-aether/bin/` | Cores downloaded by the plugin |
+| `~/.local/share/omarchy-aether/data/` | Working directory for the core (identity files, `aether.toml`, gateway cache) |
+| `~/.local/share/omarchy-aether/aether.log` | Daemon log shown in Live Logs |
+| `~/.config/omarchy-aether/config.env` | Plugin settings (source of truth for all options) |
+
+Identity files (`aether.toml`, `aether-masque.toml`, last-connection cache) are created by the Aether core inside the data directory and are never touched by plugin removal.
+
+## Remove
+
+```sh
+omarchy plugin remove cluvex.aether
+```
+
+Before removing: disconnect the tunnel first if you want a clean teardown (removal leaves the daemon running otherwise). To also drop the WARP identities and logs, delete `~/.local/share/omarchy-aether/`.
+
+## Security notes
+
+- Plugins run unsandboxed inside the Omarchy shell with your user permissions. This plugin only shells out to its own `bin/aether-ctl`, `curl`, `tar`, `jq`, and `systemctl`, and never requests root.
+- Release downloads are fetched over HTTPS from GitHub but are **not** checksum-verified; verify the archive yourself if that matters to you.
+- The local SOCKS5 proxy has no authentication and binds to `127.0.0.1` only. Do not expose the port to your network.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE). The Aether core is a separate project by CluvexStudio under its own license.

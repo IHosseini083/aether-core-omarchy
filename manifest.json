@@ -2,11 +2,10 @@
   "schemaVersion": 1,
   "id": "cluvex.aether",
   "name": "Aether",
-  "version": "1.1.0",
-  "author": "CluvexStudio",
+  "version": "1.4.0",
+  "author": "iliya",
   "license": "MIT",
-  "homepage": "https://github.com/CluvexStudio/Aether",
-  "description": "Omarchy shell plugin for Aether: censorship circumvention WARP client with MASQUE, WireGuard, nested tunneling, system proxy, live logs, and core manager.",
+  "description": "Omarchy bar controls for the Aether core: tunnel status, every CLI option, polled logs, and core selection/download.",
   "kinds": [
     "bar-widget"
   ],
@@ -20,10 +19,12 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "autoConnect": false,
       "socksPort": 1819,
       "httpProxyPort": 0,
-      "customBinaryPath": ""
+      "customBinaryPath": "",
+      "protocol": "masque",
+      "scan": "balanced",
+      "noize": "firewall"
     },
     "schema": [
       {

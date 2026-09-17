@@ -27,20 +27,62 @@ Item {
   property int latency: 0
   property int proxyPort: 1819
   property int httpProxyPort: 0
-  property bool systemProxy: false
+  property int socks_port: 1819
+  property int http_proxy_port: 0
+  property string fragment_size: "16-32"
+  property string fragment_delay: "2-10"
+  property string extra_args: ""
 
-  // Configuration
+  // Configuration — property names intentionally mirror the ctl config keys
   property string protocol: "masque"
   property string scan: "balanced"
   property string noize: "firewall"
-  property string ipMode: "v4"
+  property string ip_mode: "v4"
   property bool h2: false
   property bool fragment: false
-  property bool quickReconnect: true
-  property bool markEnabled: false
+  property bool quick_reconnect: true
+  property bool mark_enabled: false
+  property bool no_quic_v2: false
+  property string ech: "off"
+  property bool no_data_check: false
+  property int keepalive: 5
+  property string peer: ""
+  property string wiw_outer: ""
+  property string wiw_inner: ""
+  property string mim_outer: ""
+  property string mim_inner: ""
+  property string dns: ""
+  property string team: ""
+  property bool gateway: false
+  property string upstream: ""
+  property string route_direct: ""
+  property string route_block: ""
+  property string log_level: "info"
+  property string wg_peer: ""
+  property string h2_peer: ""
+  property bool no_profile_retry: false
+  property string validate_secs: ""
+  property string startup_secs: ""
+  property string reconnect_secs: ""
+  property string perf: ""
+  property string tls_groups: ""
+  property string routes_file: ""
+  property string tor_bind: ""
+  property string tor_dir: ""
+  property string tor_bridges: ""
+  property string tor_bridge: ""
+  property string tor_pt: ""
+  property string tor_pt_dir: ""
+  property string tor_country: ""
+  property string access_id: ""
+  property string access_secret: ""
+  property string access_token: ""
+  property string access_email: ""
 
   // Logs & Operations
   property string logsText: ""
+  property string logsHtml: ""
+  property bool autoTailLogs: true
   property bool refreshing: false
   property bool fetchingLogs: false
   property bool installing: false
@@ -65,7 +107,7 @@ Item {
     if (logsProcess.running) return
     fetchingLogs = true
     _logsOutput = ""
-    logsProcess.command = [ctlPath, "logs", "45"]
+    logsProcess.command = [ctlPath, "logs", "100"]
     logsProcess.running = true
   }
 
@@ -85,30 +127,33 @@ Item {
     runAction(["restart"], "Restarting tunnel…")
   }
 
-  function toggleSystemProxy() {
-    runAction(["proxy", "toggle"], "Toggling system proxy…")
-  }
-
   function installAether() {
     if (installProcess.running) return
     installing = true
-    actionStatus = "Downloading and installing official Aether core…"
+    actionStatus = "Downloading official Aether release from GitHub…"
+    lastError = ""
     _installOutput = ""
     installProcess.command = [ctlPath, "install"]
     installProcess.running = true
   }
 
   function setConfig(key, value) {
-    runAction(["set", key, String(value)], "Updating setting…")
+    runAction(["set", key, String(value)], "Applying " + key + "…")
+  }
+
+  // Atomic protocol switch: one ctl invocation, no dropped updates
+  function setProtocol(protocol, h2) {
+    runAction(["set-protocol", protocol, h2 ? "1" : "0"], "Switching transport…")
   }
 
   function setCore(path) {
-    runAction(["set", "bin", String(path)], "Switching core binary…")
+    runAction(["set", "bin", String(path)], "Activating selected core…")
   }
 
   function clearLogs() {
     runAction(["clear-logs"], "Clearing logs…")
     logsText = ""
+    logsHtml = Model.colorizeLogsToHtml("", Color.accent, Color.urgent)
   }
 
   function clearCache() {
@@ -190,15 +235,55 @@ Item {
         root.latency = data.latency_ms
         root.proxyPort = data.proxy_port
         root.httpProxyPort = data.http_proxy_port
-        root.systemProxy = data.system_proxy
+        root.socks_port = data.proxy_port
+        root.http_proxy_port = data.http_proxy_port
+        root.fragment_size = data.fragment_size
+        root.fragment_delay = data.fragment_delay
+        root.extra_args = data.extra_args
         root.protocol = data.protocol
         root.scan = data.scan
         root.noize = data.noize
-        root.ipMode = data.ip_mode
+        root.ip_mode = data.ip_mode
         root.h2 = data.h2
         root.fragment = data.fragment
-        root.quickReconnect = data.quick_reconnect
-        root.markEnabled = data.mark_enabled
+        root.quick_reconnect = data.quick_reconnect
+        root.mark_enabled = data.mark_enabled
+        root.no_quic_v2 = data.no_quic_v2
+        root.ech = data.ech
+        root.no_data_check = data.no_data_check
+        root.keepalive = data.keepalive
+        root.peer = data.peer
+        root.wiw_outer = data.wiw_outer
+        root.wiw_inner = data.wiw_inner
+        root.mim_outer = data.mim_outer
+        root.mim_inner = data.mim_inner
+        root.dns = data.dns
+        root.team = data.team
+        root.gateway = data.gateway === true
+        root.upstream = data.upstream
+        root.route_direct = data.route_direct
+        root.route_block = data.route_block
+        root.log_level = data.log_level
+        root.wg_peer = data.wg_peer
+        root.h2_peer = data.h2_peer
+        root.no_profile_retry = data.no_profile_retry
+        root.validate_secs = data.validate_secs
+        root.startup_secs = data.startup_secs
+        root.reconnect_secs = data.reconnect_secs
+        root.perf = data.perf
+        root.tls_groups = data.tls_groups
+        root.routes_file = data.routes_file
+        root.tor_bind = data.tor_bind
+        root.tor_dir = data.tor_dir
+        root.tor_bridges = data.tor_bridges
+        root.tor_bridge = data.tor_bridge
+        root.tor_pt = data.tor_pt
+        root.tor_pt_dir = data.tor_pt_dir
+        root.tor_country = data.tor_country
+        root.access_id = data.access_id
+        root.access_secret = data.access_secret
+        root.access_token = data.access_token
+        root.access_email = data.access_email
       }
     }
   }
@@ -214,6 +299,7 @@ Item {
       root.fetchingLogs = false
       if (code === 0) {
         root.logsText = Model.cleanLogLines(root._logsOutput.trim())
+        root.logsHtml = Model.colorizeLogsToHtml(root._logsOutput.trim(), Color.accent, Color.urgent)
       }
     }
   }
@@ -251,13 +337,18 @@ Item {
         root._installOutput += line
       }
     }
+    stderr: SplitParser {
+      onRead: function(line) {
+        root.lastError += line
+      }
+    }
     onExited: function(code) {
       root.installing = false
       if (code === 0) {
-        root.actionStatus = "Installation complete! Core ready."
+        root.actionStatus = "Installation complete! Aether core is ready."
         resetStatusTimer.restart()
       } else {
-        root.lastError = "Install failed. Check internet connection."
+        root.lastError = "Install failed: " + (root.lastError || "Check network connection")
       }
       root.refresh()
     }
@@ -265,11 +356,14 @@ Item {
 
   Timer {
     id: pollTimer
-    interval: root.running ? 6000 : 15000
+    interval: root.running ? 4000 : 12000
     running: true
     repeat: true
     onTriggered: {
       root.refresh()
+      if (root.autoTailLogs) {
+        root.fetchLogs()
+      }
     }
   }
 

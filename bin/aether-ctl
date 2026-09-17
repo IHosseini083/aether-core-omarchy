@@ -14,19 +14,56 @@ LOG_FILE="$DATA_DIR/aether.log"
 
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$RUN_DIR" "$BIN_DIR"
 
-# Defaults
+DEFAULT_CUSTOM_BIN=""
 DEFAULT_PROTOCOL="masque"
 DEFAULT_SCAN="balanced"
 DEFAULT_NOIZE="firewall"
 DEFAULT_IP="v4"
 DEFAULT_SOCKS_PORT=1819
 DEFAULT_HTTP_PROXY_PORT=0
+DEFAULT_UPSTREAM=""
 DEFAULT_MARK="0"
 DEFAULT_QUICK_RECONNECT=1
 DEFAULT_H2=0
 DEFAULT_FRAGMENT=0
+DEFAULT_FRAGMENT_SIZE="16-32"
+DEFAULT_FRAGMENT_DELAY="2-10"
+DEFAULT_NO_QUIC_V2=0
+DEFAULT_ECH="off"
+DEFAULT_NO_DATA_CHECK=0
+DEFAULT_KEEPALIVE=5
+DEFAULT_PEER=""
+DEFAULT_WIW_OUTER=""
+DEFAULT_WIW_INNER=""
+DEFAULT_MIM_OUTER=""
+DEFAULT_MIM_INNER=""
+DEFAULT_DNS=""
+DEFAULT_TEAM=""
+DEFAULT_ACCESS_TOKEN=""
+DEFAULT_GATEWAY=0
+DEFAULT_ROUTE_BLOCK=""
+DEFAULT_ROUTE_DIRECT=""
+DEFAULT_LOG_LEVEL="info"
 DEFAULT_EXTRA_ARGS=""
-DEFAULT_CUSTOM_BIN=""
+DEFAULT_WG_PEER=""
+DEFAULT_H2_PEER=""
+DEFAULT_NO_PROFILE_RETRY=0
+DEFAULT_VALIDATE_SECS=""
+DEFAULT_STARTUP_SECS=""
+DEFAULT_RECONNECT_SECS=""
+DEFAULT_PERF=""
+DEFAULT_TLS_GROUPS=""
+DEFAULT_ROUTES_FILE=""
+DEFAULT_TOR_BIND=""
+DEFAULT_TOR_DIR=""
+DEFAULT_TOR_BRIDGES=""
+DEFAULT_TOR_BRIDGE=""
+DEFAULT_TOR_PT=""
+DEFAULT_TOR_PT_DIR=""
+DEFAULT_TOR_COUNTRY=""
+DEFAULT_ACCESS_ID=""
+DEFAULT_ACCESS_SECRET=""
+DEFAULT_ACCESS_EMAIL=""
 
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -41,11 +78,49 @@ load_config() {
   IP_MODE="${AETHER_CFG_IP:-$DEFAULT_IP}"
   SOCKS_PORT="${AETHER_CFG_SOCKS_PORT:-$DEFAULT_SOCKS_PORT}"
   HTTP_PROXY_PORT="${AETHER_CFG_HTTP_PROXY_PORT:-$DEFAULT_HTTP_PROXY_PORT}"
+  UPSTREAM="${AETHER_CFG_UPSTREAM:-$DEFAULT_UPSTREAM}"
   MARK="${AETHER_CFG_MARK:-$DEFAULT_MARK}"
   QUICK_RECONNECT="${AETHER_CFG_QUICK_RECONNECT:-$DEFAULT_QUICK_RECONNECT}"
   H2="${AETHER_CFG_H2:-$DEFAULT_H2}"
   FRAGMENT="${AETHER_CFG_FRAGMENT:-$DEFAULT_FRAGMENT}"
+  FRAGMENT_SIZE="${AETHER_CFG_FRAGMENT_SIZE:-$DEFAULT_FRAGMENT_SIZE}"
+  FRAGMENT_DELAY="${AETHER_CFG_FRAGMENT_DELAY:-$DEFAULT_FRAGMENT_DELAY}"
+  NO_QUIC_V2="${AETHER_CFG_NO_QUIC_V2:-$DEFAULT_NO_QUIC_V2}"
+  ECH="${AETHER_CFG_ECH:-$DEFAULT_ECH}"
+  NO_DATA_CHECK="${AETHER_CFG_NO_DATA_CHECK:-$DEFAULT_NO_DATA_CHECK}"
+  KEEPALIVE="${AETHER_CFG_KEEPALIVE:-$DEFAULT_KEEPALIVE}"
+  PEER="${AETHER_CFG_PEER:-$DEFAULT_PEER}"
+  WIW_OUTER="${AETHER_CFG_WIW_OUTER:-$DEFAULT_WIW_OUTER}"
+  WIW_INNER="${AETHER_CFG_WIW_INNER:-$DEFAULT_WIW_INNER}"
+  MIM_OUTER="${AETHER_CFG_MIM_OUTER:-$DEFAULT_MIM_OUTER}"
+  MIM_INNER="${AETHER_CFG_MIM_INNER:-$DEFAULT_MIM_INNER}"
+  DNS="${AETHER_CFG_DNS:-$DEFAULT_DNS}"
+  TEAM="${AETHER_CFG_TEAM:-$DEFAULT_TEAM}"
+  ACCESS_TOKEN="${AETHER_CFG_ACCESS_TOKEN:-$DEFAULT_ACCESS_TOKEN}"
+  GATEWAY="${AETHER_CFG_GATEWAY:-$DEFAULT_GATEWAY}"
+  ROUTE_BLOCK="${AETHER_CFG_ROUTE_BLOCK:-$DEFAULT_ROUTE_BLOCK}"
+  ROUTE_DIRECT="${AETHER_CFG_ROUTE_DIRECT:-$DEFAULT_ROUTE_DIRECT}"
+  LOG_LEVEL="${AETHER_CFG_LOG_LEVEL:-$DEFAULT_LOG_LEVEL}"
   EXTRA_ARGS="${AETHER_CFG_EXTRA_ARGS:-$DEFAULT_EXTRA_ARGS}"
+  WG_PEER="${AETHER_CFG_WG_PEER:-$DEFAULT_WG_PEER}"
+  H2_PEER="${AETHER_CFG_H2_PEER:-$DEFAULT_H2_PEER}"
+  NO_PROFILE_RETRY="${AETHER_CFG_NO_PROFILE_RETRY:-$DEFAULT_NO_PROFILE_RETRY}"
+  VALIDATE_SECS="${AETHER_CFG_VALIDATE_SECS:-$DEFAULT_VALIDATE_SECS}"
+  STARTUP_SECS="${AETHER_CFG_STARTUP_SECS:-$DEFAULT_STARTUP_SECS}"
+  RECONNECT_SECS="${AETHER_CFG_RECONNECT_SECS:-$DEFAULT_RECONNECT_SECS}"
+  PERF="${AETHER_CFG_PERF:-$DEFAULT_PERF}"
+  TLS_GROUPS="${AETHER_CFG_TLS_GROUPS:-$DEFAULT_TLS_GROUPS}"
+  ROUTES_FILE="${AETHER_CFG_ROUTES_FILE:-$DEFAULT_ROUTES_FILE}"
+  TOR_BIND="${AETHER_CFG_TOR_BIND:-$DEFAULT_TOR_BIND}"
+  TOR_DIR="${AETHER_CFG_TOR_DIR:-$DEFAULT_TOR_DIR}"
+  TOR_BRIDGES="${AETHER_CFG_TOR_BRIDGES:-$DEFAULT_TOR_BRIDGES}"
+  TOR_BRIDGE="${AETHER_CFG_TOR_BRIDGE:-$DEFAULT_TOR_BRIDGE}"
+  TOR_PT="${AETHER_CFG_TOR_PT:-$DEFAULT_TOR_PT}"
+  TOR_PT_DIR="${AETHER_CFG_TOR_PT_DIR:-$DEFAULT_TOR_PT_DIR}"
+  TOR_COUNTRY="${AETHER_CFG_TOR_COUNTRY:-$DEFAULT_TOR_COUNTRY}"
+  ACCESS_ID="${AETHER_CFG_ACCESS_ID:-$DEFAULT_ACCESS_ID}"
+  ACCESS_SECRET="${AETHER_CFG_ACCESS_SECRET:-$DEFAULT_ACCESS_SECRET}"
+  ACCESS_EMAIL="${AETHER_CFG_ACCESS_EMAIL:-$DEFAULT_ACCESS_EMAIL}"
 }
 
 save_config() {
@@ -57,11 +132,49 @@ AETHER_CFG_NOIZE="${NOIZE}"
 AETHER_CFG_IP="${IP_MODE}"
 AETHER_CFG_SOCKS_PORT="${SOCKS_PORT}"
 AETHER_CFG_HTTP_PROXY_PORT="${HTTP_PROXY_PORT}"
+AETHER_CFG_UPSTREAM="${UPSTREAM}"
 AETHER_CFG_MARK="${MARK}"
 AETHER_CFG_QUICK_RECONNECT="${QUICK_RECONNECT}"
 AETHER_CFG_H2="${H2}"
 AETHER_CFG_FRAGMENT="${FRAGMENT}"
+AETHER_CFG_FRAGMENT_SIZE="${FRAGMENT_SIZE}"
+AETHER_CFG_FRAGMENT_DELAY="${FRAGMENT_DELAY}"
+AETHER_CFG_NO_QUIC_V2="${NO_QUIC_V2}"
+AETHER_CFG_ECH="${ECH}"
+AETHER_CFG_NO_DATA_CHECK="${NO_DATA_CHECK}"
+AETHER_CFG_KEEPALIVE="${KEEPALIVE}"
+AETHER_CFG_PEER="${PEER}"
+AETHER_CFG_WIW_OUTER="${WIW_OUTER}"
+AETHER_CFG_WIW_INNER="${WIW_INNER}"
+AETHER_CFG_MIM_OUTER="${MIM_OUTER}"
+AETHER_CFG_MIM_INNER="${MIM_INNER}"
+AETHER_CFG_DNS="${DNS}"
+AETHER_CFG_TEAM="${TEAM}"
+AETHER_CFG_ACCESS_TOKEN="${ACCESS_TOKEN}"
+AETHER_CFG_GATEWAY="${GATEWAY}"
+AETHER_CFG_ROUTE_BLOCK="${ROUTE_BLOCK}"
+AETHER_CFG_ROUTE_DIRECT="${ROUTE_DIRECT}"
+AETHER_CFG_LOG_LEVEL="${LOG_LEVEL}"
 AETHER_CFG_EXTRA_ARGS="${EXTRA_ARGS}"
+AETHER_CFG_WG_PEER="${WG_PEER}"
+AETHER_CFG_H2_PEER="${H2_PEER}"
+AETHER_CFG_NO_PROFILE_RETRY="${NO_PROFILE_RETRY}"
+AETHER_CFG_VALIDATE_SECS="${VALIDATE_SECS}"
+AETHER_CFG_STARTUP_SECS="${STARTUP_SECS}"
+AETHER_CFG_RECONNECT_SECS="${RECONNECT_SECS}"
+AETHER_CFG_PERF="${PERF}"
+AETHER_CFG_TLS_GROUPS="${TLS_GROUPS}"
+AETHER_CFG_ROUTES_FILE="${ROUTES_FILE}"
+AETHER_CFG_TOR_BIND="${TOR_BIND}"
+AETHER_CFG_TOR_DIR="${TOR_DIR}"
+AETHER_CFG_TOR_BRIDGES="${TOR_BRIDGES}"
+AETHER_CFG_TOR_BRIDGE="${TOR_BRIDGE}"
+AETHER_CFG_TOR_PT="${TOR_PT}"
+AETHER_CFG_TOR_PT_DIR="${TOR_PT_DIR}"
+AETHER_CFG_TOR_COUNTRY="${TOR_COUNTRY}"
+AETHER_CFG_ACCESS_ID="${ACCESS_ID}"
+AETHER_CFG_ACCESS_SECRET="${ACCESS_SECRET}"
+AETHER_CFG_ACCESS_EMAIL="${ACCESS_EMAIL}"
 EOF
 }
 
@@ -70,7 +183,6 @@ load_config
 is_cluvex_aether() {
   local candidate="$1"
   [[ -n "$candidate" && -f "$candidate" && -x "$candidate" ]] || return 1
-  # Verify it is CluvexStudio Aether and not the desktop theme generator
   if "$candidate" --help 2>&1 | grep -iq "socks5"; then
     return 0
   fi
@@ -116,21 +228,21 @@ find_all_cores() {
     "/opt/aether/aether"
   )
 
-  local seen=()
+  local seen=""
   for cand in "${candidates[@]}"; do
     [[ -n "$cand" ]] || continue
-    if [[ ! " ${seen[*]} " =~ " ${cand} " ]]; then
-      seen+=("$cand")
+    if [[ " $seen " != *" $cand "* ]]; then
+      seen="$seen $cand"
       if is_cluvex_aether "$cand"; then
         echo "$cand"
       fi
     fi
   done
 
-  # Search PATH
   while IFS= read -r cand; do
-    if [[ -n "$cand" && ! " ${seen[*]} " =~ " ${cand} " ]]; then
-      seen+=("$cand")
+    [[ -n "$cand" ]] || continue
+    if [[ " $seen " != *" $cand "* ]]; then
+      seen="$seen $cand"
       if is_cluvex_aether "$cand"; then
         echo "$cand"
       fi
@@ -185,48 +297,12 @@ is_running() {
   get_running_pid >/dev/null 2>&1
 }
 
-is_system_proxy_on() {
-  if ! command -v gsettings &>/dev/null; then
-    return 1
-  fi
-  local mode host port
-  mode=$(gsettings get org.gnome.system.proxy mode 2>/dev/null | tr -d "'" || true)
-  host=$(gsettings get org.gnome.system.proxy.socks host 2>/dev/null | tr -d "'" || true)
-  port=$(gsettings get org.gnome.system.proxy.socks port 2>/dev/null || true)
-
-  [[ "$mode" == "manual" && "$host" == "127.0.0.1" && "$port" == "$SOCKS_PORT" ]]
-}
-
-set_system_proxy() {
-  local target="${1:-toggle}"
-  if ! command -v gsettings &>/dev/null; then
-    echo "gsettings not available" >&2
-    return 1
-  fi
-
-  if [[ "$target" == "toggle" ]]; then
-    if is_system_proxy_on; then
-      target="off"
-    else
-      target="on"
-    fi
-  fi
-
-  if [[ "$target" == "on" ]]; then
-    gsettings set org.gnome.system.proxy.socks host '127.0.0.1'
-    gsettings set org.gnome.system.proxy.socks port "$SOCKS_PORT"
-    gsettings set org.gnome.system.proxy mode 'manual'
-  else
-    gsettings set org.gnome.system.proxy mode 'none'
-  fi
-}
-
 probe_trace() {
   local port="${1:-$SOCKS_PORT}"
   local start_time end_time elapsed_ms
   start_time=$(date +%s%N)
   local trace
-  trace=$(curl -s --connect-timeout 2 -m 4 -x "socks5h://127.0.0.1:${port}" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
+  trace=$(curl -s --connect-timeout 2 -m 3 -x "socks5h://127.0.0.1:${port}" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
   end_time=$(date +%s%N)
 
   if [[ -z "$trace" || "$trace" != *"warp="* ]]; then
@@ -247,21 +323,69 @@ build_args() {
       args+=("--masque")
       if [[ "$H2" == "1" ]]; then
         args+=("--h2")
+        if [[ -n "$H2_PEER" ]]; then
+          args+=("--h2-peer" "$H2_PEER")
+        fi
         if [[ "$FRAGMENT" == "1" ]]; then
           args+=("--fragment")
+          if [[ -n "$FRAGMENT_SIZE" && "$FRAGMENT_SIZE" != "$DEFAULT_FRAGMENT_SIZE" ]]; then
+            args+=("--fragment-size" "$FRAGMENT_SIZE")
+          fi
+          if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
+            args+=("--fragment-delay" "$FRAGMENT_DELAY")
+          fi
         fi
+      else
+        if [[ "$NO_QUIC_V2" == "1" ]]; then
+          args+=("--no-quic-v2")
+        fi
+      fi
+      if [[ -n "$ECH" && "$ECH" != "off" ]]; then
+        args+=("--ech" "$ECH")
+      fi
+      if [[ -n "$VALIDATE_SECS" ]]; then
+        args+=("--validate-secs" "$VALIDATE_SECS")
+      fi
+      if [[ -n "$STARTUP_SECS" ]]; then
+        args+=("--startup-secs" "$STARTUP_SECS")
+      fi
+      if [[ -n "$RECONNECT_SECS" ]]; then
+        args+=("--reconnect-secs" "$RECONNECT_SECS")
       fi
       ;;
     wg)
       args+=("--wg")
+      if [[ -n "$KEEPALIVE" && "$KEEPALIVE" != "$DEFAULT_KEEPALIVE" ]]; then
+        args+=("--keepalive" "$KEEPALIVE")
+      fi
+      if [[ -n "$WG_PEER" ]]; then
+        args+=("--wg-peer" "$WG_PEER")
+      fi
+      if [[ "$NO_PROFILE_RETRY" == "1" ]]; then
+        args+=("--no-profile-retry")
+      fi
       ;;
     gool)
       args+=("--gool")
+      if [[ -n "$WIW_OUTER" && -n "$WIW_INNER" ]]; then
+        args+=("--wiw-outer" "$WIW_OUTER" "--wiw-inner" "$WIW_INNER")
+      elif [[ -n "$WIW_OUTER" ]]; then
+        args+=("--wiw-outer" "$WIW_OUTER")
+      elif [[ -n "$WIW_INNER" ]]; then
+        args+=("--wiw-inner" "$WIW_INNER")
+      fi
       ;;
     mim)
       args+=("--mim")
       if [[ "$H2" == "1" ]]; then
         args+=("--h2")
+      fi
+      if [[ -n "$MIM_OUTER" && -n "$MIM_INNER" ]]; then
+        args+=("--mim-outer" "$MIM_OUTER" "--mim-inner" "$MIM_INNER")
+      elif [[ -n "$MIM_OUTER" ]]; then
+        args+=("--mim-outer" "$MIM_OUTER")
+      elif [[ -n "$MIM_INNER" ]]; then
+        args+=("--mim-inner" "$MIM_INNER")
       fi
       ;;
     tor)
@@ -278,48 +402,121 @@ build_args() {
       ;;
   esac
 
-  # Scan profile
   if [[ -n "$SCAN" ]]; then
     args+=("--scan" "$SCAN")
   fi
 
-  # Obfuscation profile
   if [[ -n "$NOIZE" ]]; then
     args+=("--noize" "$NOIZE")
   fi
 
-  # IP version
   case "$IP_MODE" in
     v4) args+=("-4") ;;
     v6) args+=("-6") ;;
     dual) args+=("--dual") ;;
   esac
 
-  # SOCKS5 bind address
+  if [[ -n "$PEER" ]]; then
+    args+=("--peer" "$PEER")
+  fi
+
   args+=("--bind" "127.0.0.1:${SOCKS_PORT}")
 
-  # HTTP Connect proxy
   if [[ "$HTTP_PROXY_PORT" != "0" && -n "$HTTP_PROXY_PORT" ]]; then
     args+=("--http-proxy" "127.0.0.1:${HTTP_PROXY_PORT}")
   fi
 
-  # Mark (firewall mark) - only pass if mark is enabled AND binary/environment has cap_net_admin
+  if [[ -n "$UPSTREAM" ]]; then
+    args+=("--upstream" "$UPSTREAM")
+  fi
+
+  if [[ "$NO_DATA_CHECK" == "1" ]]; then
+    args+=("--no-data-check")
+  fi
+
+  if [[ -n "$DNS" ]]; then
+    args+=("--dns" "$DNS")
+  fi
+
+  if [[ -n "$TEAM" ]]; then
+    args+=("--team" "$TEAM")
+  fi
+  if [[ -n "$ACCESS_TOKEN" ]]; then
+    args+=("--access-token" "$ACCESS_TOKEN")
+  fi
+  if [[ -n "$ACCESS_ID" ]]; then
+    args+=("--access-id" "$ACCESS_ID")
+  fi
+  if [[ -n "$ACCESS_SECRET" ]]; then
+    args+=("--access-secret" "$ACCESS_SECRET")
+  fi
+  if [[ -n "$ACCESS_EMAIL" ]]; then
+    args+=("--access-email" "$ACCESS_EMAIL")
+  fi
+  if [[ "$GATEWAY" == "1" ]]; then
+    args+=("--gateway")
+  fi
+
+  if [[ -n "$ROUTE_BLOCK" ]]; then
+    args+=("--route-block" "$ROUTE_BLOCK")
+  fi
+  if [[ -n "$ROUTE_DIRECT" ]]; then
+    args+=("--route-direct" "$ROUTE_DIRECT")
+  fi
+  if [[ -n "$ROUTES_FILE" ]]; then
+    args+=("--routes" "$ROUTES_FILE")
+  fi
+
+  # Tor extras only make sense for the tor transports; a core built without
+  # the tor feature would reject these flags outright.
+  if [[ "$PROTOCOL" == tor* ]]; then
+    if [[ -n "$TOR_BIND" ]]; then
+      args+=("--tor-bind" "$TOR_BIND")
+    fi
+    if [[ -n "$TOR_DIR" ]]; then
+      args+=("--tor-dir" "$TOR_DIR")
+    fi
+    if [[ "$TOR_BRIDGES" == "on" ]]; then
+      args+=("--tor-bridges")
+    elif [[ "$TOR_BRIDGES" == "off" ]]; then
+      args+=("--no-tor-bridges")
+    fi
+    if [[ -n "$TOR_BRIDGE" ]]; then
+      args+=("--tor-bridge" "$TOR_BRIDGE")
+    fi
+    if [[ -n "$TOR_PT" ]]; then
+      args+=("--tor-pt" "$TOR_PT")
+    fi
+    if [[ -n "$TOR_PT_DIR" ]]; then
+      args+=("--tor-pt-dir" "$TOR_PT_DIR")
+    fi
+  fi
+
+  if [[ -n "$TLS_GROUPS" ]]; then
+    args+=("--tls-groups" "$TLS_GROUPS")
+  fi
+  if [[ -n "$PERF" ]]; then
+    args+=("--perf" "$PERF")
+  fi
+
   if [[ "$MARK" == "1" || "$MARK" == "0xff" ]]; then
     if has_cap_net_admin "$bin"; then
       args+=("--mark" "0xff")
     else
-      echo "[warning] --mark 0xff requested but binary lacks CAP_NET_ADMIN; omitting to prevent abort" >> "$LOG_FILE"
+      echo "[$(date -Iseconds)] [plugin] --mark requested but lacking CAP_NET_ADMIN; omitting" >> "$LOG_FILE"
     fi
   fi
 
-  # Quick reconnect
   if [[ "$QUICK_RECONNECT" == "1" ]]; then
     args+=("--quick-reconnect")
   else
     args+=("--no-quick-reconnect")
   fi
 
-  # Extra custom arguments
+  if [[ -n "$LOG_LEVEL" ]]; then
+    args+=("--log-level" "$LOG_LEVEL")
+  fi
+
   if [[ -n "$EXTRA_ARGS" ]]; then
     # shellcheck disable=SC2206
     local extra=($EXTRA_ARGS)
@@ -333,7 +530,7 @@ rotate_logs_if_needed() {
   if [[ -f "$LOG_FILE" ]]; then
     local size
     size=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
-    if (( size > 2097152 )); then # 2MB
+    if (( size > 2097152 )); then
       mv "$LOG_FILE" "${LOG_FILE}.old"
     fi
   fi
@@ -361,11 +558,6 @@ cmd_status() {
     pid=$(get_running_pid || true)
   fi
 
-  local system_proxy="false"
-  if is_system_proxy_on; then
-    system_proxy="true"
-  fi
-
   local connected="false"
   local ip=""
   local colo=""
@@ -385,7 +577,6 @@ cmd_status() {
     fi
   fi
 
-  # Gather discovered cores
   local cores_json="[]"
   local core_list=()
   while IFS= read -r c; do
@@ -413,7 +604,6 @@ cmd_status() {
   "latency_ms": ${latency:-0},
   "proxy_port": $SOCKS_PORT,
   "http_proxy_port": $HTTP_PROXY_PORT,
-  "system_proxy": $system_proxy,
   "protocol": "$PROTOCOL",
   "scan": "$SCAN",
   "noize": "$NOIZE",
@@ -422,6 +612,41 @@ cmd_status() {
   "fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
   "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" ),
   "mark_enabled": $( [[ "$MARK" == "1" || "$MARK" == "0xff" ]] && echo "true" || echo "false" ),
+  "no_quic_v2": $( [[ "$NO_QUIC_V2" == "1" ]] && echo "true" || echo "false" ),
+  "ech": "$ECH",
+  "no_data_check": $( [[ "$NO_DATA_CHECK" == "1" ]] && echo "true" || echo "false" ),
+  "keepalive": $KEEPALIVE,
+  "peer": "$PEER",
+  "wiw_outer": "$WIW_OUTER",
+  "wiw_inner": "$WIW_INNER",
+  "mim_outer": "$MIM_OUTER",
+  "mim_inner": "$MIM_INNER",
+  "dns": "$DNS",
+  "team": "$TEAM",
+  "gateway": $( [[ "$GATEWAY" == "1" ]] && echo "true" || echo "false" ),
+  "upstream": "$UPSTREAM",
+  "route_direct": "$ROUTE_DIRECT",
+  "route_block": "$ROUTE_BLOCK",
+  "log_level": "$LOG_LEVEL",
+  "wg_peer": "$WG_PEER",
+  "h2_peer": "$H2_PEER",
+  "no_profile_retry": $( [[ "$NO_PROFILE_RETRY" == "1" ]] && echo "true" || echo "false" ),
+  "validate_secs": "$VALIDATE_SECS",
+  "startup_secs": "$STARTUP_SECS",
+  "reconnect_secs": "$RECONNECT_SECS",
+  "perf": "$PERF",
+  "tls_groups": "$TLS_GROUPS",
+  "routes_file": "$ROUTES_FILE",
+  "tor_bind": "$TOR_BIND",
+  "tor_dir": "$TOR_DIR",
+  "tor_bridges": "$TOR_BRIDGES",
+  "tor_bridge": "$TOR_BRIDGE",
+  "tor_pt": "$TOR_PT",
+  "tor_pt_dir": "$TOR_PT_DIR",
+  "tor_country": "$TOR_COUNTRY",
+  "access_id": "$ACCESS_ID",
+  "access_secret": "$ACCESS_SECRET",
+  "access_email": "$ACCESS_EMAIL",
   "discovered_cores": $cores_json
 }
 EOF
@@ -435,7 +660,7 @@ cmd_start() {
 
   local bin
   bin=$(detect_aether_bin) || {
-    echo "Aether core not found. Please click 'Install Aether' or specify a custom binary path." >&2
+    echo "Aether core not found. Download core or specify custom binary path." >&2
     return 1
   }
 
@@ -443,31 +668,20 @@ cmd_start() {
 
   mapfile -t ARGS < <(build_args "$bin")
 
-  echo "[$(date -Iseconds)] Launching $bin ${ARGS[*]}" >> "$LOG_FILE"
+  echo "[$(date -Iseconds)] [plugin] Launching $bin ${ARGS[*]}" >> "$LOG_FILE"
 
-  # Start via systemd service if available and configured
-  if has_systemd_service && systemctl --user is-enabled --quiet aether 2>/dev/null; then
-    systemctl --user start aether
-    sleep 1
-    if systemctl --user is-active --quiet aether; then
-      echo "Started via systemd service."
-      return 0
-    fi
+  # AETHER_TOR_COUNTRY is env-only upstream (no flag)
+  if [[ -n "$TOR_COUNTRY" ]]; then
+    export AETHER_TOR_COUNTRY="$TOR_COUNTRY"
   fi
 
-  # Start in background with dedicated user data directory and separate process group
   cd "$RUN_DIR"
   setsid "$bin" "${ARGS[@]}" </dev/null >>"$LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_FILE"
   disown "$pid"
-  if [[ -z "$pid" ]]; then
-    echo "Failed to obtain process PID." >&2
-    return 1
-  fi
 
-  # Verification window: ensure it didn't exit immediately due to error
-  sleep 1.2
+  sleep 0.8
   if ! kill -0 "$pid" 2>/dev/null; then
     local err
     err=$(tail -n 6 "$LOG_FILE" 2>/dev/null | grep -iE "error|denied|failed|cannot" | head -n1 || true)
@@ -475,7 +689,7 @@ cmd_start() {
       err=$(tail -n 2 "$LOG_FILE" 2>/dev/null | head -n1 || true)
     fi
     rm -f "$PID_FILE"
-    echo "Process failed to start: ${err:-unknown error}" >&2
+    echo "Failed to start: ${err:-process terminated immediately}" >&2
     return 1
   fi
 
@@ -483,43 +697,30 @@ cmd_start() {
 }
 
 cmd_stop() {
-  local stopped="false"
-
-  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
-    systemctl --user stop aether
-    stopped="true"
-  fi
-
   local pid
   pid=$(get_running_pid || true)
 
   if [[ -n "$pid" ]]; then
-    # Graceful shutdown (SIGINT lets Aether save state and close tunnel)
     kill -INT "$pid" 2>/dev/null || true
-    for _ in {1..25}; do
+    for _ in {1..15}; do
       if ! kill -0 "$pid" 2>/dev/null; then
-        stopped="true"
         break
       fi
-      sleep 0.1
+      sleep 0.05
     done
 
-    # If still alive, escalate to SIGTERM
     if kill -0 "$pid" 2>/dev/null; then
       kill -TERM "$pid" 2>/dev/null || true
-      sleep 0.5
+      sleep 0.2
     fi
 
-    # Force kill if still hung
     if kill -0 "$pid" 2>/dev/null; then
       kill -KILL "$pid" 2>/dev/null || true
     fi
-    stopped="true"
   fi
 
   rm -f "$PID_FILE"
 
-  # Clean up any rogue instances
   local rogue
   rogue=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
   if [[ -n "$rogue" ]]; then
@@ -531,7 +732,7 @@ cmd_stop() {
 
 cmd_restart() {
   cmd_stop
-  sleep 0.8
+  sleep 0.2
   cmd_start
 }
 
@@ -543,15 +744,37 @@ cmd_toggle() {
   fi
 }
 
+# Run in the foreground (no setsid/disown) for systemd Type=simple
+cmd_foreground() {
+  local bin
+  bin=$(detect_aether_bin) || {
+    echo "Aether core not found. Download core or specify custom binary path." >&2
+    return 1
+  }
+
+  rotate_logs_if_needed
+
+  mapfile -t ARGS < <(build_args "$bin")
+
+  echo "[$(date -Iseconds)] [plugin] Executing $bin ${ARGS[*]}" >> "$LOG_FILE"
+
+  if [[ -n "$TOR_COUNTRY" ]]; then
+    export AETHER_TOR_COUNTRY="$TOR_COUNTRY"
+  fi
+
+  cd "$RUN_DIR"
+  exec "$bin" "${ARGS[@]}"
+}
+
 cmd_install() {
   local arch
   arch=$(uname -m)
-  local release_arch=""
+  local release_file=""
 
   case "$arch" in
-    x86_64)  release_arch="x86_64" ;;
-    aarch64|arm64) release_arch="arm64" ;;
-    armv7l)  release_arch="armv7" ;;
+    x86_64)  release_file="aether-linux-x86_64.tar.gz" ;;
+    aarch64|arm64) release_file="aether-linux-arm64.tar.gz" ;;
+    armv7l)  release_file="aether-linux-armv7.tar.gz" ;;
     *)
       echo "Unsupported architecture: $arch" >&2
       return 1
@@ -559,20 +782,22 @@ cmd_install() {
   esac
 
   mkdir -p "$BIN_DIR"
-  local tar_name="aether-linux-${release_arch}.tar.gz"
-  local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${tar_name}"
-  local tmp_file="/tmp/${tar_name}"
+  local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${release_file}"
+  local tmp_file="/tmp/${release_file}"
 
-  echo "Downloading Aether ($release_arch) from $url..."
+  echo "Downloading Aether ($arch) from $url..."
 
-  if ! curl -fsSL -m 30 "$url" -o "$tmp_file"; then
-    # Fallback to local SOCKS proxy if already connected through another tunnel
-    if curl -fsSL -m 30 -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
-      echo "Downloaded via proxy fallback."
-    else
-      echo "Failed to download Aether release archive from GitHub." >&2
-      return 1
-    fi
+  local dl_ok=0
+  if curl -fsSL --connect-timeout 5 -m 45 "$url" -o "$tmp_file"; then
+    dl_ok=1
+  elif is_running && curl -fsSL --connect-timeout 5 -m 45 -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
+    echo "Downloaded via proxy fallback."
+    dl_ok=1
+  fi
+
+  if [[ "$dl_ok" -ne 1 ]]; then
+    echo "Download failed. Check your internet connection." >&2
+    return 1
   fi
 
   echo "Extracting binary..."
@@ -580,18 +805,15 @@ cmd_install() {
   chmod +x "$BIN_DIR/aether"
   rm -f "$tmp_file"
 
-  # Also fetch pluggable transports (pt/) if available
-  local pt_tar="pt-linux-${release_arch}.tar.gz"
-  local pt_url="https://github.com/CluvexStudio/Aether/releases/latest/download/${pt_tar}"
-  if curl -fsSL -m 15 "$pt_url" -o "/tmp/$pt_tar" 2>/dev/null; then
-    tar -xzf "/tmp/$pt_tar" -C "$BIN_DIR" 2>/dev/null || true
-    rm -f "/tmp/$pt_tar"
-  fi
-
   CUSTOM_BIN="$BIN_DIR/aether"
   save_config
 
-  echo "Aether installed successfully to $BIN_DIR/aether"
+  echo "Installed Aether to $BIN_DIR/aether"
+
+  if is_running; then
+    echo "Restarting tunnel with the new core…"
+    cmd_restart
+  fi
 }
 
 cmd_set_config() {
@@ -614,11 +836,49 @@ cmd_set_config() {
     ip) IP_MODE="$val" ;;
     socks_port) SOCKS_PORT="$val" ;;
     http_proxy_port) HTTP_PROXY_PORT="$val" ;;
+    upstream) UPSTREAM="$val" ;;
     mark) MARK="$val" ;;
     quick_reconnect) QUICK_RECONNECT="$val" ;;
     h2) H2="$val" ;;
     fragment) FRAGMENT="$val" ;;
+    fragment_size) FRAGMENT_SIZE="$val" ;;
+    fragment_delay) FRAGMENT_DELAY="$val" ;;
+    no_quic_v2) NO_QUIC_V2="$val" ;;
+    ech) ECH="$val" ;;
+    no_data_check) NO_DATA_CHECK="$val" ;;
+    keepalive) KEEPALIVE="$val" ;;
+    peer) PEER="$val" ;;
+    wiw_outer) WIW_OUTER="$val" ;;
+    wiw_inner) WIW_INNER="$val" ;;
+    mim_outer) MIM_OUTER="$val" ;;
+    mim_inner) MIM_INNER="$val" ;;
+    dns) DNS="$val" ;;
+    team) TEAM="$val" ;;
+    access_token) ACCESS_TOKEN="$val" ;;
+    gateway) GATEWAY="$val" ;;
+    route_block) ROUTE_BLOCK="$val" ;;
+    route_direct) ROUTE_DIRECT="$val" ;;
+    log_level) LOG_LEVEL="$val" ;;
     extra_args) EXTRA_ARGS="$val" ;;
+    wg_peer) WG_PEER="$val" ;;
+    h2_peer) H2_PEER="$val" ;;
+    no_profile_retry) NO_PROFILE_RETRY="$val" ;;
+    validate_secs) VALIDATE_SECS="$val" ;;
+    startup_secs) STARTUP_SECS="$val" ;;
+    reconnect_secs) RECONNECT_SECS="$val" ;;
+    perf) PERF="$val" ;;
+    tls_groups) TLS_GROUPS="$val" ;;
+    routes_file) ROUTES_FILE="$val" ;;
+    tor_bind) TOR_BIND="$val" ;;
+    tor_dir) TOR_DIR="$val" ;;
+    tor_bridges) TOR_BRIDGES="$val" ;;
+    tor_bridge) TOR_BRIDGE="$val" ;;
+    tor_pt) TOR_PT="$val" ;;
+    tor_pt_dir) TOR_PT_DIR="$val" ;;
+    tor_country) TOR_COUNTRY="$val" ;;
+    access_id) ACCESS_ID="$val" ;;
+    access_secret) ACCESS_SECRET="$val" ;;
+    access_email) ACCESS_EMAIL="$val" ;;
     *)
       echo "Unknown config key: $key" >&2
       return 1
@@ -626,78 +886,72 @@ cmd_set_config() {
   esac
 
   save_config
-  echo "Updated $key=$val"
+
+  if is_running; then
+    cmd_restart
+  else
+    echo "Updated $key=$val"
+  fi
+}
+
+cmd_set_protocol() {
+  local proto="${1:-masque}"
+  local h2="${2:-0}"
+
+  case "$proto" in
+    masque|wg|gool|mim) ;;
+    *) echo "Unknown protocol: $proto" >&2; return 1 ;;
+  esac
+
+  PROTOCOL="$proto"
+  H2="$h2"
+  save_config
+
+  if is_running; then
+    cmd_restart
+  else
+    echo "Protocol set to $proto (h2=$h2)"
+  fi
 }
 
 cmd_logs() {
-  local lines="${1:-50}"
+  local lines="${1:-60}"
   if [[ -f "$LOG_FILE" ]]; then
     tail -n "$lines" "$LOG_FILE"
   else
-    echo "No log file found at $LOG_FILE"
+    echo "No log entries yet."
   fi
 }
 
 cmd_clear_logs() {
   if [[ -f "$LOG_FILE" ]]; then
     truncate -s 0 "$LOG_FILE"
-    echo "Logs cleared."
   fi
+  echo "Logs cleared."
 }
 
 cmd_clear_cache() {
   rm -f "$RUN_DIR"/*lastconn* "$RUN_DIR"/*secondary*
-  echo "Connection cache cleared. Next start will perform a full scan."
+  echo "Connection cache cleared."
 }
 
 case "${1:-status}" in
-  status)
-    cmd_status
-    ;;
-  start)
-    cmd_start
-    ;;
-  stop)
-    cmd_stop
-    ;;
-  restart)
-    cmd_restart
-    ;;
-  toggle)
-    cmd_toggle
-    ;;
-  install)
-    cmd_install
-    ;;
-  set)
-    shift
-    cmd_set_config "$@"
-    ;;
-  cores|list-cores)
-    cmd_status | jq '.discovered_cores'
-    ;;
-  logs)
-    cmd_logs "${2:-50}"
-    ;;
-  clear-logs)
-    cmd_clear_logs
-    ;;
-  clear-cache)
-    cmd_clear_cache
-    ;;
-  proxy)
-    set_system_proxy "${2:-toggle}"
-    if is_system_proxy_on; then
-      echo "System proxy: on"
-    else
-      echo "System proxy: off"
-    fi
-    ;;
-  probe)
-    probe_trace "$SOCKS_PORT"
-    ;;
+  status) cmd_status ;;
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  restart) cmd_restart ;;
+  toggle) cmd_toggle ;;
+  foreground) cmd_foreground ;;
+  install) cmd_install ;;
+  set) shift; cmd_set_config "$@" ;;
+  set-protocol) shift; cmd_set_protocol "$@" ;;
+  cores|list-cores) cmd_status | jq '.discovered_cores' ;;
+  logs) cmd_logs "${2:-60}" ;;
+  clear-logs) cmd_clear_logs ;;
+  clear-cache) cmd_clear_cache ;;
+  probe) probe_trace "$SOCKS_PORT" ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|logs [N]|clear-logs|clear-cache|proxy [on|off|toggle]|probe}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|logs [N]|clear-logs|clear-cache|probe}"
     exit 1
     ;;
 esac
