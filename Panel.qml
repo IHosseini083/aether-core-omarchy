@@ -39,7 +39,6 @@ Panel {
 
   Service {
     id: aether
-    settings: root.settings
   }
 
   IpcHandler {
@@ -318,7 +317,8 @@ Panel {
       font.pixelSize: Style.font.body
       foreground: root.foreground
       accent: root.accent
-      onAccepted: if (fld.text !== af.current) aether.setConfig(af.key, fld.text)
+      // editingFinished fires on both Enter and focus loss; a separate
+      // onAccepted handler would commit the same value twice.
       onEditingFinished: if (fld.text !== af.current) aether.setConfig(af.key, fld.text)
       Component.onCompleted: if (af.current !== "") fld.text = af.current
     }

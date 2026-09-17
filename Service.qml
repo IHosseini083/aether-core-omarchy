@@ -7,8 +7,6 @@ import "Model.js" as Model
 Item {
   id: root
 
-  property var settings: ({})
-
   // Core status
   property bool installed: false
   property string binary: ""

@@ -121,64 +121,102 @@ load_config() {
   ACCESS_ID="${AETHER_CFG_ACCESS_ID:-$DEFAULT_ACCESS_ID}"
   ACCESS_SECRET="${AETHER_CFG_ACCESS_SECRET:-$DEFAULT_ACCESS_SECRET}"
   ACCESS_EMAIL="${AETHER_CFG_ACCESS_EMAIL:-$DEFAULT_ACCESS_EMAIL}"
+
+  # Legacy config files written before %q quoting may carry junk in numeric
+  # fields; normalize so downstream arithmetic and JSON stay valid.
+  [[ "${SOCKS_PORT:-}" =~ ^[0-9]+$ ]] || SOCKS_PORT="$DEFAULT_SOCKS_PORT"
+  [[ "${HTTP_PROXY_PORT:-}" =~ ^[0-9]+$ ]] || HTTP_PROXY_PORT="$DEFAULT_HTTP_PROXY_PORT"
+  [[ "${KEEPALIVE:-}" =~ ^[0-9]+$ ]] || KEEPALIVE="$DEFAULT_KEEPALIVE"
 }
 
 save_config() {
-  cat > "$CONFIG_FILE" <<EOF
-AETHER_CFG_BIN="${CUSTOM_BIN}"
-AETHER_CFG_PROTOCOL="${PROTOCOL}"
-AETHER_CFG_SCAN="${SCAN}"
-AETHER_CFG_NOIZE="${NOIZE}"
-AETHER_CFG_IP="${IP_MODE}"
-AETHER_CFG_SOCKS_PORT="${SOCKS_PORT}"
-AETHER_CFG_HTTP_PROXY_PORT="${HTTP_PROXY_PORT}"
-AETHER_CFG_UPSTREAM="${UPSTREAM}"
-AETHER_CFG_MARK="${MARK}"
-AETHER_CFG_QUICK_RECONNECT="${QUICK_RECONNECT}"
-AETHER_CFG_H2="${H2}"
-AETHER_CFG_FRAGMENT="${FRAGMENT}"
-AETHER_CFG_FRAGMENT_SIZE="${FRAGMENT_SIZE}"
-AETHER_CFG_FRAGMENT_DELAY="${FRAGMENT_DELAY}"
-AETHER_CFG_NO_QUIC_V2="${NO_QUIC_V2}"
-AETHER_CFG_ECH="${ECH}"
-AETHER_CFG_NO_DATA_CHECK="${NO_DATA_CHECK}"
-AETHER_CFG_KEEPALIVE="${KEEPALIVE}"
-AETHER_CFG_PEER="${PEER}"
-AETHER_CFG_WIW_OUTER="${WIW_OUTER}"
-AETHER_CFG_WIW_INNER="${WIW_INNER}"
-AETHER_CFG_MIM_OUTER="${MIM_OUTER}"
-AETHER_CFG_MIM_INNER="${MIM_INNER}"
-AETHER_CFG_DNS="${DNS}"
-AETHER_CFG_TEAM="${TEAM}"
-AETHER_CFG_ACCESS_TOKEN="${ACCESS_TOKEN}"
-AETHER_CFG_GATEWAY="${GATEWAY}"
-AETHER_CFG_ROUTE_BLOCK="${ROUTE_BLOCK}"
-AETHER_CFG_ROUTE_DIRECT="${ROUTE_DIRECT}"
-AETHER_CFG_LOG_LEVEL="${LOG_LEVEL}"
-AETHER_CFG_EXTRA_ARGS="${EXTRA_ARGS}"
-AETHER_CFG_WG_PEER="${WG_PEER}"
-AETHER_CFG_H2_PEER="${H2_PEER}"
-AETHER_CFG_NO_PROFILE_RETRY="${NO_PROFILE_RETRY}"
-AETHER_CFG_VALIDATE_SECS="${VALIDATE_SECS}"
-AETHER_CFG_STARTUP_SECS="${STARTUP_SECS}"
-AETHER_CFG_RECONNECT_SECS="${RECONNECT_SECS}"
-AETHER_CFG_PERF="${PERF}"
-AETHER_CFG_TLS_GROUPS="${TLS_GROUPS}"
-AETHER_CFG_ROUTES_FILE="${ROUTES_FILE}"
-AETHER_CFG_TOR_BIND="${TOR_BIND}"
-AETHER_CFG_TOR_DIR="${TOR_DIR}"
-AETHER_CFG_TOR_BRIDGES="${TOR_BRIDGES}"
-AETHER_CFG_TOR_BRIDGE="${TOR_BRIDGE}"
-AETHER_CFG_TOR_PT="${TOR_PT}"
-AETHER_CFG_TOR_PT_DIR="${TOR_PT_DIR}"
-AETHER_CFG_TOR_COUNTRY="${TOR_COUNTRY}"
-AETHER_CFG_ACCESS_ID="${ACCESS_ID}"
-AETHER_CFG_ACCESS_SECRET="${ACCESS_SECRET}"
-AETHER_CFG_ACCESS_EMAIL="${ACCESS_EMAIL}"
-EOF
+  # %q shell-quotes every value, so a config.env can always be `source`d
+  # safely, no matter what characters a user typed into a panel field.
+  {
+    printf 'AETHER_CFG_BIN=%q\n' "$CUSTOM_BIN"
+    printf 'AETHER_CFG_PROTOCOL=%q\n' "$PROTOCOL"
+    printf 'AETHER_CFG_SCAN=%q\n' "$SCAN"
+    printf 'AETHER_CFG_NOIZE=%q\n' "$NOIZE"
+    printf 'AETHER_CFG_IP=%q\n' "$IP_MODE"
+    printf 'AETHER_CFG_SOCKS_PORT=%q\n' "$SOCKS_PORT"
+    printf 'AETHER_CFG_HTTP_PROXY_PORT=%q\n' "$HTTP_PROXY_PORT"
+    printf 'AETHER_CFG_UPSTREAM=%q\n' "$UPSTREAM"
+    printf 'AETHER_CFG_MARK=%q\n' "$MARK"
+    printf 'AETHER_CFG_QUICK_RECONNECT=%q\n' "$QUICK_RECONNECT"
+    printf 'AETHER_CFG_H2=%q\n' "$H2"
+    printf 'AETHER_CFG_FRAGMENT=%q\n' "$FRAGMENT"
+    printf 'AETHER_CFG_FRAGMENT_SIZE=%q\n' "$FRAGMENT_SIZE"
+    printf 'AETHER_CFG_FRAGMENT_DELAY=%q\n' "$FRAGMENT_DELAY"
+    printf 'AETHER_CFG_NO_QUIC_V2=%q\n' "$NO_QUIC_V2"
+    printf 'AETHER_CFG_ECH=%q\n' "$ECH"
+    printf 'AETHER_CFG_NO_DATA_CHECK=%q\n' "$NO_DATA_CHECK"
+    printf 'AETHER_CFG_KEEPALIVE=%q\n' "$KEEPALIVE"
+    printf 'AETHER_CFG_PEER=%q\n' "$PEER"
+    printf 'AETHER_CFG_WIW_OUTER=%q\n' "$WIW_OUTER"
+    printf 'AETHER_CFG_WIW_INNER=%q\n' "$WIW_INNER"
+    printf 'AETHER_CFG_MIM_OUTER=%q\n' "$MIM_OUTER"
+    printf 'AETHER_CFG_MIM_INNER=%q\n' "$MIM_INNER"
+    printf 'AETHER_CFG_DNS=%q\n' "$DNS"
+    printf 'AETHER_CFG_TEAM=%q\n' "$TEAM"
+    printf 'AETHER_CFG_ACCESS_TOKEN=%q\n' "$ACCESS_TOKEN"
+    printf 'AETHER_CFG_GATEWAY=%q\n' "$GATEWAY"
+    printf 'AETHER_CFG_ROUTE_BLOCK=%q\n' "$ROUTE_BLOCK"
+    printf 'AETHER_CFG_ROUTE_DIRECT=%q\n' "$ROUTE_DIRECT"
+    printf 'AETHER_CFG_LOG_LEVEL=%q\n' "$LOG_LEVEL"
+    printf 'AETHER_CFG_EXTRA_ARGS=%q\n' "$EXTRA_ARGS"
+    printf 'AETHER_CFG_WG_PEER=%q\n' "$WG_PEER"
+    printf 'AETHER_CFG_H2_PEER=%q\n' "$H2_PEER"
+    printf 'AETHER_CFG_NO_PROFILE_RETRY=%q\n' "$NO_PROFILE_RETRY"
+    printf 'AETHER_CFG_VALIDATE_SECS=%q\n' "$VALIDATE_SECS"
+    printf 'AETHER_CFG_STARTUP_SECS=%q\n' "$STARTUP_SECS"
+    printf 'AETHER_CFG_RECONNECT_SECS=%q\n' "$RECONNECT_SECS"
+    printf 'AETHER_CFG_PERF=%q\n' "$PERF"
+    printf 'AETHER_CFG_TLS_GROUPS=%q\n' "$TLS_GROUPS"
+    printf 'AETHER_CFG_ROUTES_FILE=%q\n' "$ROUTES_FILE"
+    printf 'AETHER_CFG_TOR_BIND=%q\n' "$TOR_BIND"
+    printf 'AETHER_CFG_TOR_DIR=%q\n' "$TOR_DIR"
+    printf 'AETHER_CFG_TOR_BRIDGES=%q\n' "$TOR_BRIDGES"
+    printf 'AETHER_CFG_TOR_BRIDGE=%q\n' "$TOR_BRIDGE"
+    printf 'AETHER_CFG_TOR_PT=%q\n' "$TOR_PT"
+    printf 'AETHER_CFG_TOR_PT_DIR=%q\n' "$TOR_PT_DIR"
+    printf 'AETHER_CFG_TOR_COUNTRY=%q\n' "$TOR_COUNTRY"
+    printf 'AETHER_CFG_ACCESS_ID=%q\n' "$ACCESS_ID"
+    printf 'AETHER_CFG_ACCESS_SECRET=%q\n' "$ACCESS_SECRET"
+    printf 'AETHER_CFG_ACCESS_EMAIL=%q\n' "$ACCESS_EMAIL"
+  } > "$CONFIG_FILE"
+
+  # Discovery results may be stale after a config change (custom binary,
+  # protocol-dependent probing); drop the cache so the next status re-scans.
+  rm -f "$RUN_DIR/cores.cache" 2>/dev/null || true
 }
 
 load_config
+
+# JSON emission helpers. User-typed values flow into cmd_status, so every
+# string must be escaped and every number validated — one raw quote would
+# invalidate the whole status document and reset the panel.
+json_escape() {
+  local s="${1:-}"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+json_str() {
+  printf '"%s"' "$(json_escape "${1:-}")"
+}
+
+# Emit $1 as a JSON number when it is a plain integer, else fall back to $2.
+json_num() {
+  if [[ "${1:-}" =~ ^-?[0-9]+$ ]]; then
+    printf '%s' "$1"
+  else
+    printf '%s' "$2"
+  fi
+}
 
 is_cluvex_aether() {
   local candidate="$1"
@@ -218,6 +256,28 @@ get_binary_version() {
 }
 
 find_all_cores() {
+  # Discovery probes every candidate with `--help`; the status poll would
+  # repeat that every few seconds. Cache results for a short TTL and drop
+  # the cache whenever the config changes (see save_config) or a core is
+  # installed/removed.
+  local cache="$RUN_DIR/cores.cache"
+  if [[ -f "$cache" ]]; then
+    local mtime now
+    mtime=$(stat -c%Y "$cache" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if (( now - mtime < 30 )); then
+      cat "$cache"
+      return 0
+    fi
+  fi
+
+  local result
+  result=$(discover_all_cores)
+  printf '%s\n' "$result" > "$cache"
+  printf '%s\n' "$result"
+}
+
+discover_all_cores() {
   local candidates=(
     "$CUSTOM_BIN"
     "$BIN_DIR/aether"
@@ -270,11 +330,28 @@ has_systemd_service() {
   systemctl --user list-unit-files aether.service &>/dev/null
 }
 
+# True when $1 is a live PID whose cmdline matches the recorded core binary
+# (or, for pid files written before the binary was recorded, an aether
+# transport). Guards against killing an unrelated process whose PID was
+# recycled after a crash.
+is_aether_pid() {
+  local pid="$1" rec_bin="${2:-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  [[ -r "/proc/$pid/cmdline" ]] || return 1
+  local cmdline
+  cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+  if [[ -n "$rec_bin" ]]; then
+    [[ "$cmdline" == *"$rec_bin"* ]] && return 0
+  fi
+  [[ "$cmdline" == *"aether"* && "$cmdline" =~ (--masque|--wg|--gool|--mim|--tor) ]]
+}
+
 get_running_pid() {
   if [[ -f "$PID_FILE" ]]; then
-    local pid
-    pid=$(cat "$PID_FILE" 2>/dev/null || true)
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    local pid rec_bin
+    pid=$(head -n1 "$PID_FILE" 2>/dev/null || true)
+    rec_bin=$(sed -n '2p' "$PID_FILE" 2>/dev/null || true)
+    if is_aether_pid "$pid" "$rec_bin"; then
       echo "$pid"
       return 0
     fi
@@ -283,8 +360,13 @@ get_running_pid() {
   local pids
   pids=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
   if [[ -n "$pids" ]]; then
-    echo "$pids" | head -n1
-    return 0
+    local p
+    while IFS= read -r p; do
+      if is_aether_pid "$p"; then
+        echo "$p"
+        return 0
+      fi
+    done <<< "$pids"
   fi
 
   return 1
@@ -581,7 +663,7 @@ cmd_status() {
   local core_list=()
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
-    core_list+=("\"$c\"")
+    core_list+=("\"$(json_escape "$c")\"")
   done < <(find_all_cores)
 
   if (( ${#core_list[@]} > 0 )); then
@@ -591,62 +673,65 @@ cmd_status() {
   cat <<EOF
 {
   "installed": $installed,
-  "binary": "$bin",
-  "binary_version": "$bin_version",
+  "binary": $(json_str "$bin"),
+  "binary_version": $(json_str "$bin_version"),
   "has_cap_net_admin": $has_cap,
   "running": $running,
-  "pid": "${pid:-}",
+  "pid": $(json_str "${pid:-}"),
   "connected": $connected,
-  "ip": "${ip:-}",
-  "colo": "${colo:-}",
-  "loc": "${loc:-}",
-  "warp": "${warp:-}",
-  "latency_ms": ${latency:-0},
-  "proxy_port": $SOCKS_PORT,
-  "http_proxy_port": $HTTP_PROXY_PORT,
-  "protocol": "$PROTOCOL",
-  "scan": "$SCAN",
-  "noize": "$NOIZE",
-  "ip_mode": "$IP_MODE",
+  "ip": $(json_str "${ip:-}"),
+  "colo": $(json_str "${colo:-}"),
+  "loc": $(json_str "${loc:-}"),
+  "warp": $(json_str "${warp:-}"),
+  "latency_ms": $(json_num "${latency:-0}" 0),
+  "proxy_port": $(json_num "$SOCKS_PORT" 1819),
+  "http_proxy_port": $(json_num "$HTTP_PROXY_PORT" 0),
+  "protocol": $(json_str "$PROTOCOL"),
+  "scan": $(json_str "$SCAN"),
+  "noize": $(json_str "$NOIZE"),
+  "ip_mode": $(json_str "$IP_MODE"),
   "h2": $( [[ "$H2" == "1" ]] && echo "true" || echo "false" ),
   "fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
   "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" ),
   "mark_enabled": $( [[ "$MARK" == "1" || "$MARK" == "0xff" ]] && echo "true" || echo "false" ),
   "no_quic_v2": $( [[ "$NO_QUIC_V2" == "1" ]] && echo "true" || echo "false" ),
-  "ech": "$ECH",
+  "ech": $(json_str "$ECH"),
   "no_data_check": $( [[ "$NO_DATA_CHECK" == "1" ]] && echo "true" || echo "false" ),
-  "keepalive": $KEEPALIVE,
-  "peer": "$PEER",
-  "wiw_outer": "$WIW_OUTER",
-  "wiw_inner": "$WIW_INNER",
-  "mim_outer": "$MIM_OUTER",
-  "mim_inner": "$MIM_INNER",
-  "dns": "$DNS",
-  "team": "$TEAM",
+  "keepalive": $(json_num "$KEEPALIVE" 5),
+  "fragment_size": $(json_str "$FRAGMENT_SIZE"),
+  "fragment_delay": $(json_str "$FRAGMENT_DELAY"),
+  "extra_args": $(json_str "$EXTRA_ARGS"),
+  "peer": $(json_str "$PEER"),
+  "wiw_outer": $(json_str "$WIW_OUTER"),
+  "wiw_inner": $(json_str "$WIW_INNER"),
+  "mim_outer": $(json_str "$MIM_OUTER"),
+  "mim_inner": $(json_str "$MIM_INNER"),
+  "dns": $(json_str "$DNS"),
+  "team": $(json_str "$TEAM"),
   "gateway": $( [[ "$GATEWAY" == "1" ]] && echo "true" || echo "false" ),
-  "upstream": "$UPSTREAM",
-  "route_direct": "$ROUTE_DIRECT",
-  "route_block": "$ROUTE_BLOCK",
-  "log_level": "$LOG_LEVEL",
-  "wg_peer": "$WG_PEER",
-  "h2_peer": "$H2_PEER",
+  "upstream": $(json_str "$UPSTREAM"),
+  "route_direct": $(json_str "$ROUTE_DIRECT"),
+  "route_block": $(json_str "$ROUTE_BLOCK"),
+  "log_level": $(json_str "$LOG_LEVEL"),
+  "wg_peer": $(json_str "$WG_PEER"),
+  "h2_peer": $(json_str "$H2_PEER"),
   "no_profile_retry": $( [[ "$NO_PROFILE_RETRY" == "1" ]] && echo "true" || echo "false" ),
-  "validate_secs": "$VALIDATE_SECS",
-  "startup_secs": "$STARTUP_SECS",
-  "reconnect_secs": "$RECONNECT_SECS",
-  "perf": "$PERF",
-  "tls_groups": "$TLS_GROUPS",
-  "routes_file": "$ROUTES_FILE",
-  "tor_bind": "$TOR_BIND",
-  "tor_dir": "$TOR_DIR",
-  "tor_bridges": "$TOR_BRIDGES",
-  "tor_bridge": "$TOR_BRIDGE",
-  "tor_pt": "$TOR_PT",
-  "tor_pt_dir": "$TOR_PT_DIR",
-  "tor_country": "$TOR_COUNTRY",
-  "access_id": "$ACCESS_ID",
-  "access_secret": "$ACCESS_SECRET",
-  "access_email": "$ACCESS_EMAIL",
+  "validate_secs": $(json_str "$VALIDATE_SECS"),
+  "startup_secs": $(json_str "$STARTUP_SECS"),
+  "reconnect_secs": $(json_str "$RECONNECT_SECS"),
+  "perf": $(json_str "$PERF"),
+  "tls_groups": $(json_str "$TLS_GROUPS"),
+  "routes_file": $(json_str "$ROUTES_FILE"),
+  "tor_bind": $(json_str "$TOR_BIND"),
+  "tor_dir": $(json_str "$TOR_DIR"),
+  "tor_bridges": $(json_str "$TOR_BRIDGES"),
+  "tor_bridge": $(json_str "$TOR_BRIDGE"),
+  "tor_pt": $(json_str "$TOR_PT"),
+  "tor_pt_dir": $(json_str "$TOR_PT_DIR"),
+  "tor_country": $(json_str "$TOR_COUNTRY"),
+  "access_id": $(json_str "$ACCESS_ID"),
+  "access_secret": $(json_str "$ACCESS_SECRET"),
+  "access_email": $(json_str "$ACCESS_EMAIL"),
   "discovered_cores": $cores_json
 }
 EOF
@@ -678,7 +763,9 @@ cmd_start() {
   cd "$RUN_DIR"
   setsid "$bin" "${ARGS[@]}" </dev/null >>"$LOG_FILE" 2>&1 &
   local pid=$!
-  echo "$pid" > "$PID_FILE"
+  # Line 1: PID. Line 2: core binary — lets get_running_pid confirm the
+  # process identity before signaling (PID reuse protection).
+  printf '%s\n%s\n' "$pid" "$bin" > "$PID_FILE"
   disown "$pid"
 
   sleep 0.8
@@ -697,6 +784,16 @@ cmd_start() {
 }
 
 cmd_stop() {
+  # When the systemd unit owns the tunnel, stop it through systemd —
+  # signaling the process directly would count as a failure and
+  # Restart=on-failure would respawn it 3s later.
+  if has_systemd_service && systemctl --user is-active --quiet aether 2>/dev/null; then
+    systemctl --user stop aether
+    rm -f "$PID_FILE"
+    echo "Stopped Aether."
+    return 0
+  fi
+
   local pid
   pid=$(get_running_pid || true)
 
@@ -721,6 +818,8 @@ cmd_stop() {
 
   rm -f "$PID_FILE"
 
+  # Intentional: also reap stray aether processes started outside the plugin
+  # (e.g. leftover from a manual terminal run) so they don't fight the panel.
   local rogue
   rogue=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
   if [[ -n "$rogue" ]]; then
@@ -783,7 +882,10 @@ cmd_install() {
 
   mkdir -p "$BIN_DIR"
   local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${release_file}"
-  local tmp_file="/tmp/${release_file}"
+  # mktemp: a predictable /tmp path would let another user pre-create a
+  # symlink and make curl clobber a victim-owned file.
+  local tmp_file
+  tmp_file=$(mktemp /tmp/aether-download.XXXXXX)
 
   echo "Downloading Aether ($arch) from $url..."
 
@@ -796,6 +898,7 @@ cmd_install() {
   fi
 
   if [[ "$dl_ok" -ne 1 ]]; then
+    rm -f "$tmp_file"
     echo "Download failed. Check your internet connection." >&2
     return 1
   fi
@@ -834,8 +937,12 @@ cmd_set_config() {
     scan) SCAN="$val" ;;
     noize) NOIZE="$val" ;;
     ip) IP_MODE="$val" ;;
-    socks_port) SOCKS_PORT="$val" ;;
-    http_proxy_port) HTTP_PROXY_PORT="$val" ;;
+    socks_port)
+      [[ "$val" =~ ^[0-9]+$ ]] && (( val >= 1024 && val <= 65535 )) || { echo "Error: socks_port must be an integer between 1024 and 65535." >&2; return 1; }
+      SOCKS_PORT="$val" ;;
+    http_proxy_port)
+      [[ "$val" =~ ^[0-9]+$ ]] && (( val <= 65535 )) || { echo "Error: http_proxy_port must be an integer between 0 and 65535." >&2; return 1; }
+      HTTP_PROXY_PORT="$val" ;;
     upstream) UPSTREAM="$val" ;;
     mark) MARK="$val" ;;
     quick_reconnect) QUICK_RECONNECT="$val" ;;
@@ -846,7 +953,9 @@ cmd_set_config() {
     no_quic_v2) NO_QUIC_V2="$val" ;;
     ech) ECH="$val" ;;
     no_data_check) NO_DATA_CHECK="$val" ;;
-    keepalive) KEEPALIVE="$val" ;;
+    keepalive)
+      [[ "$val" =~ ^[0-9]+$ ]] || { echo "Error: keepalive must be a non-negative integer." >&2; return 1; }
+      KEEPALIVE="$val" ;;
     peer) PEER="$val" ;;
     wiw_outer) WIW_OUTER="$val" ;;
     wiw_inner) WIW_INNER="$val" ;;
@@ -960,6 +1069,8 @@ cmd_remove_core() {
     rm -f "$target"
     echo "Removed $target"
   fi
+
+  rm -f "$RUN_DIR/cores.cache" 2>/dev/null || true
 }
 
 case "${1:-status}" in
@@ -972,7 +1083,7 @@ case "${1:-status}" in
   install) cmd_install ;;
   set) shift; cmd_set_config "$@" ;;
   set-protocol) shift; cmd_set_protocol "$@" ;;
-  cores|list-cores) cmd_status | jq '.discovered_cores' ;;
+  cores|list-cores) find_all_cores ;;
   logs) cmd_logs "${2:-60}" ;;
   clear-logs) cmd_clear_logs ;;
   clear-cache) cmd_clear_cache ;;

@@ -17,41 +17,6 @@
     "description": "Monitor and control the Aether censorship circumvention tunnel directly from your Omarchy bar.",
     "category": "Network",
     "allowMultiple": false,
-    "defaultSection": "right",
-    "defaults": {
-      "socksPort": 1819,
-      "httpProxyPort": 0,
-      "customBinaryPath": "",
-      "protocol": "masque",
-      "scan": "balanced",
-      "noize": "firewall"
-    },
-    "schema": [
-      {
-        "key": "socksPort",
-        "type": "integer",
-        "label": "SOCKS5 listen port",
-        "min": 1024,
-        "max": 65535,
-        "defaultValue": 1819,
-        "description": "Port where the local SOCKS5 proxy listens (default 1819)."
-      },
-      {
-        "key": "httpProxyPort",
-        "type": "integer",
-        "label": "HTTP CONNECT proxy port",
-        "min": 0,
-        "max": 65535,
-        "defaultValue": 0,
-        "description": "Optional HTTP CONNECT proxy port (0 = disabled, e.g. 1820)."
-      },
-      {
-        "key": "customBinaryPath",
-        "type": "string",
-        "label": "Custom Aether core binary path",
-        "defaultValue": "",
-        "description": "Explicit path to the aether executable. Leave blank for auto-discovery."
-      }
-    ]
+    "defaultSection": "right"
   }
 }
