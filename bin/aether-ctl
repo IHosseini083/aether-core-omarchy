@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Config, logs and pid files can carry Zero Trust tokens or launch
+# arguments containing them; keep everything user-private (0600/0700).
+umask 077
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
@@ -184,6 +188,7 @@ save_config() {
     printf 'AETHER_CFG_ACCESS_SECRET=%q\n' "$ACCESS_SECRET"
     printf 'AETHER_CFG_ACCESS_EMAIL=%q\n' "$ACCESS_EMAIL"
   } > "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE" 2>/dev/null || true
 
   # Discovery results may be stale after a config change (custom binary,
   # protocol-dependent probing); drop the cache so the next status re-scans.
