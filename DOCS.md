@@ -7,7 +7,7 @@ Deep documentation for the `cluvex.aether` Omarchy shell plugin. For a quick sta
 ```
 ~/.config/omarchy/plugins/cluvex.aether/
 ├── manifest.json        # Plugin contract (kind: bar-widget)
-├── Panel.qml            # Entry point: bar button + popup panel (3 tabs)
+├── Panel.qml            # Entry point: bar button + popup panel (4 tabs)
 ├── Service.qml          # Quickshell Process/Timer layer driving aether-ctl
 ├── Model.js             # JSON parsing, formatting, log colorization
 ├── AetherIcon.qml       # Vector shield icon (bar + hero), state-aware
@@ -33,6 +33,7 @@ aether-ctl install                    # download latest official release
 aether-ctl set <key> <val>            # update one setting (hot-restarts)
 aether-ctl set-protocol <proto> <0|1> # atomic protocol + h2 switch
 aether-ctl cores                      # discovered core binaries
+aether-ctl remove-core <path>         # delete a non-active core (managed dir removed whole)
 aether-ctl logs [N]                   # last N log lines (default 60)
 aether-ctl clear-logs|clear-cache     # housekeeping (cache = lastconn/secondary)
 aether-ctl probe                      # raw curl trace through the tunnel
@@ -112,7 +113,15 @@ All documented upstream flags now have a `set` key (see table above) except the 
 }
 ```
 
-`discovered_cores` lists every valid Aether binary found (custom path, plugin bin dir, `~/Downloads/Aether`, `~/.local/bin`, PATH, common prefixes) — detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos.
+`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.0.0** flag set.
+
+### Core remove
+
+`aether-ctl remove-core <path>` deletes a discovered binary after verifying it is a real Aether core and not the active one. Removing the plugin-managed `~/.local/share/omarchy-aether/bin/` binary deletes the whole managed directory (including its `pt/` transports); any other location is deleted as a single file.
+
+### Persistence
+
+All state lives in two files, both rewritten atomically on every change: `~/.config/omarchy-aether/config.env` (settings) and the PID/log files under `~/.local/share/omarchy-aether/`. Nothing is kept in QML — a reboot restores the exact configuration. The daemon is not auto-started at boot unless the optional systemd unit is enabled.
 
 ### Core install
 

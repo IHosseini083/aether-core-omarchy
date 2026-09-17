@@ -1,6 +1,5 @@
-[![Built for Omarchy: Plugin](https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg)](https://github.com/tcballard/omarchy-badges)
-
 # Aether — Omarchy Shell Plugin
+[![Built for Omarchy: Plugin](https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg)](https://github.com/tcballard/omarchy-badges)
 
 An [Omarchy](https://omarchy.org/) status bar widget and popup panel for controlling the [Aether](https://github.com/CluvexStudio/Aether) tunnel — a userspace Cloudflare WARP client built by [CluvexStudio](https://github.com/CluvexStudio) for heavily censored networks.
 
@@ -51,13 +50,13 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 Once the plugin repository is published, install it with (replace the URL with the actual repository):
 
 ```sh
-omarchy plugin add <REPO_URL> --enable
+omarchy plugin add https://github.com/IHosseini083/aether-core-omarchy.git --enable
 ```
 
 Manual alternative:
 
 ```sh
-git clone <REPO_URL> ~/.config/omarchy/plugins/cluvex.aether
+git clone https://github.com/IHosseini083/aether-core-omarchy.git ~/.config/omarchy/plugins/cluvex.aether
 omarchy plugin enable cluvex.aether
 ```
 
@@ -65,11 +64,24 @@ The plugin appears in the bar's right section. Move it with `omarchy bar move cl
 
 ## Core
 
-The plugin controls an Aether binary; it does not ship one.
+The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core 2.0.0**.
 
-- **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the latest official release from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/`.
-- **Custom binary:** set **Custom Aether core binary path** (or `aether-ctl set bin /path/to/aether`) to use any build, including one compiled from source.
-- **Discovery:** existing binaries are auto-detected from common locations and can be switched from the Settings tab. Detection verifies the binary is the Aether proxy (not the unrelated `aether` desktop theme generator).
+**Where the plugin looks for a core** (first match wins; each candidate is verified by running it with `--help` and checking for SOCKS5 output, so the unrelated `aether` theme tool is never mistaken for the core):
+
+1. The custom path you set (Settings tab / `aether-ctl set bin <path>`)
+2. `~/.local/share/omarchy-aether/bin/aether` — where the plugin installs official releases
+3. `~/Downloads/Aether/aether`
+4. `<plugin directory>/bin/aether`
+5. `~/.local/bin/aether`
+6. `/usr/local/bin/aether`
+7. `/opt/aether/aether`
+8. Every `aether` on your `PATH`
+
+To set up a core manually, drop the binary at any of those locations (e.g. `~/.local/bin/aether`), make it executable, and it will be discovered — or point the custom path at it.
+
+- **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the latest official release from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/` and pins it as the active core.
+- **Switch/activate:** every discovered core is listed in the Settings tab; click **Use** to activate it.
+- **Remove:** non-active cores can be deleted from the same list (**Remove**, with a confirmation). The plugin-managed directory is removed as a whole; a binary anywhere else is deleted individually.
 
 Verify a running tunnel yourself:
 
@@ -78,6 +90,10 @@ curl -x socks5h://127.0.0.1:1819 https://www.cloudflare.com/cdn-cgi/trace
 ```
 
 The reply should show a Cloudflare colo and `warp=on`.
+
+## Persistence
+
+Every setting — transport, scan mode, noize profile, ports, peers, Zero Trust and Tor options — is stored in `~/.config/omarchy-aether/config.env` the moment you change it, so your configuration survives reboots and shell restarts. The tunnel itself is not started at boot unless you enable the optional [systemd unit](#optional-systemd-user-service); that is deliberate, so a reboot never silently re-routes your traffic.
 
 ## Firewall mark (`--mark`)
 

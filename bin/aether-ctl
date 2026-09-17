@@ -935,6 +935,33 @@ cmd_clear_cache() {
   echo "Connection cache cleared."
 }
 
+cmd_remove_core() {
+  local target="${1:-}"
+  [[ -n "$target" ]] || { echo "Path required" >&2; return 1; }
+
+  target="$(readlink -f "$target" 2>/dev/null || echo "$target")"
+
+  if ! is_cluvex_aether "$target"; then
+    echo "Error: '$target' is not a valid Aether binary." >&2
+    return 1
+  fi
+
+  local active
+  active=$(detect_aether_bin || true)
+  if [[ -n "$active" && "$target" == "$active" ]]; then
+    echo "Error: cannot remove the active core. Switch to another core first." >&2
+    return 1
+  fi
+
+  if [[ "$target" == "$BIN_DIR/aether" ]]; then
+    rm -rf "$BIN_DIR"
+    echo "Removed managed core directory $BIN_DIR"
+  else
+    rm -f "$target"
+    echo "Removed $target"
+  fi
+}
+
 case "${1:-status}" in
   status) cmd_status ;;
   start) cmd_start ;;
@@ -949,9 +976,10 @@ case "${1:-status}" in
   logs) cmd_logs "${2:-60}" ;;
   clear-logs) cmd_clear_logs ;;
   clear-cache) cmd_clear_cache ;;
+  remove-core) shift; cmd_remove_core "${1:-}" ;;
   probe) probe_trace "$SOCKS_PORT" ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|logs [N]|clear-logs|clear-cache|probe}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe}"
     exit 1
     ;;
 esac

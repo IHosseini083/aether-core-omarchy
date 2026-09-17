@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "cluvex.aether",
   "name": "Aether",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": "iliya",
   "license": "MIT",
-  "description": "Omarchy bar controls for the Aether core: tunnel status, every CLI option, polled logs, and core selection/download.",
+  "description": "Omarchy bar controls for the Aether core (2.0.0): tunnel status, every CLI option, core management, and polled logs.",
   "kinds": [
     "bar-widget"
   ],

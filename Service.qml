@@ -150,6 +150,10 @@ Item {
     runAction(["set", "bin", String(path)], "Activating selected core…")
   }
 
+  function removeCore(path) {
+    runAction(["remove-core", String(path)], "Removing core…")
+  }
+
   function clearLogs() {
     runAction(["clear-logs"], "Clearing logs…")
     logsText = ""
