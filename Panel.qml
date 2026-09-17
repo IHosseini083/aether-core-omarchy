@@ -17,11 +17,6 @@ Panel {
   property string currentTab: "controls" // "controls" | "settings" | "advanced" | "logs"
   property string pendingRemovePath: ""
 
-  onCurrentTabChanged: {
-    if (currentTab === "logs" && aether.autoTailLogs)
-      Qt.callLater(function() { flick.contentY = Math.max(0, flick.contentHeight - flick.height) })
-  }
-
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color accent: Color.accent
@@ -998,34 +993,54 @@ Panel {
       BorderSurface {
         width: parent.width
         radius: Style.cornerRadius
-        // Grow with content so the whole log is reachable through the panel
-        // scroll; a fixed-height viewport clipped the tail invisibly.
-        implicitHeight: Math.min(logView.contentHeight + Style.space(16), Style.space(380))
+        // Fixed-height viewport with its OWN scroll: the box itself scrolls,
+        // not the panel. No manual ScrollBar position writes anywhere — those
+        // caused the earlier reflow distortion.
+        implicitHeight: Style.space(340)
         color: "#0a0a0f"
         borderSpec: Border.flat(root.dim, 1)
 
-        // Content grows with the log text; the panel Flickable is the
-        // single scroller, so nothing is clipped or nested.
-        TextArea {
-          id: logView
+        ScrollView {
+          id: logScroll
           anchors.fill: parent
           anchors.margins: Style.space(8)
           clip: true
-          readOnly: true
-          textFormat: TextEdit.RichText
-          wrapMode: TextEdit.WrapAnywhere
-          persistentSelection: false
-          color: root.foreground
-          selectionColor: Style.selectionFillFor(root.foreground, root.accent)
-          selectedTextColor: root.foreground
-          font.family: "monospace"
-          font.pixelSize: Style.font.caption
+          ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-          text: aether.logsHtml !== "" ? aether.logsHtml : "<span style='color:#666;'>(No recent log entries)</span>"
+          function toBottom() {
+            var f = logScroll.contentItem
+            if (f) f.contentY = Math.max(0, f.contentHeight - f.height)
+          }
 
-          onTextChanged: {
-            if (aether.autoTailLogs && root.currentTab === "logs")
-              Qt.callLater(function() { flick.contentY = Math.max(0, flick.contentHeight - flick.height) })
+          // Tail when the tab mounts; the TextArea's onTextChanged covers
+          // updates while it is already visible.
+          Component.onCompleted: if (aether.autoTailLogs) Qt.callLater(logScroll.toBottom)
+          Connections {
+            target: root
+            function onCurrentTabChanged() {
+              if (root.currentTab === "logs" && aether.autoTailLogs)
+                Qt.callLater(logScroll.toBottom)
+            }
+          }
+
+          TextArea {
+            id: logView
+            readOnly: true
+            textFormat: TextEdit.RichText
+            wrapMode: TextEdit.WrapAnywhere
+            persistentSelection: false
+            color: root.foreground
+            selectionColor: Style.selectionFillFor(root.foreground, root.accent)
+            selectedTextColor: root.foreground
+            font.family: "monospace"
+            font.pixelSize: Style.font.caption
+
+            text: aether.logsHtml !== "" ? aether.logsHtml : "<span style='color:#666;'>(No recent log entries)</span>"
+
+            onTextChanged: {
+              if (aether.autoTailLogs && root.currentTab === "logs")
+                Qt.callLater(logScroll.toBottom)
+            }
           }
         }
       }
