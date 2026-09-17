@@ -293,6 +293,7 @@ Panel {
     id: af
     property string key: ""
     property string labelText: ""
+    property string hintText: ""
     property bool secret: false
     readonly property string current: key !== "" ? aether[key] : ""
 
@@ -321,6 +322,16 @@ Panel {
       // onAccepted handler would commit the same value twice.
       onEditingFinished: if (fld.text !== af.current) aether.setConfig(af.key, fld.text)
       Component.onCompleted: if (af.current !== "") fld.text = af.current
+    }
+
+    Text {
+      visible: af.hintText !== ""
+      width: parent.width
+      wrapMode: Text.Wrap
+      text: af.hintText
+      font.pixelSize: Style.font.caption
+      color: root.dim
+      font.family: root.fontFamily
     }
   }
 
@@ -934,7 +945,11 @@ Panel {
         options: ["error", "warn", "info", "debug", "trace"]
       }
 
-      AetherField { key: "extra_args"; labelText: "Extra core arguments (verbatim)" }
+      AetherField {
+        key: "extra_args"
+        labelText: "Extra core arguments (verbatim)"
+        hintText: "Appended as-is to the core command line, split on spaces. Handy for flags the panel doesn't expose — e.g. --verbose, or --ironclad-port 80."
+      }
     }
   }
 
