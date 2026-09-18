@@ -565,6 +565,39 @@ zeptun_has_cap_net_admin() {
   return 1
 }
 
+# Grant CAP_NET_ADMIN to a binary. The plugin never runs as root: escalation
+# happens only through the user's explicit approval — a cached sudo attempt
+# first, then a polkit password prompt (bounded, so a dismissed dialog cannot
+# hang the action). Fails open with the manual command.
+ensure_cap_net_admin() {
+  local binary="$1" label="${2:-Binary}"
+  zeptun_has_cap_net_admin "$binary" && return 0
+
+  echo "$label needs CAP_NET_ADMIN."
+  if command -v sudo &>/dev/null && sudo -n setcap cap_net_admin+ep "$binary" 2>/dev/null; then
+    echo "Granted CAP_NET_ADMIN to $label via sudo."
+  elif command -v pkexec &>/dev/null; then
+    echo "Approve the privilege prompt to grant CAP_NET_ADMIN to $label…"
+    if timeout 120 pkexec setcap cap_net_admin+ep "$binary" 2>/dev/null; then
+      echo "Granted CAP_NET_ADMIN to $label via polkit."
+    else
+      echo "Capability not granted (prompt dismissed or timed out). Run manually:" >&2
+      echo "  sudo setcap cap_net_admin+ep $binary" >&2
+      return 1
+    fi
+  else
+    echo "Capability not granted. Run manually:" >&2
+    echo "  sudo setcap cap_net_admin+ep $binary" >&2
+    return 1
+  fi
+
+  zeptun_has_cap_net_admin "$binary"
+}
+
+zeptun_ensure_cap() {
+  ensure_cap_net_admin "$1" "Zeptun"
+}
+
 # True when $1 is a live process whose cmdline matches the recorded zeptun
 # binary (PID-reuse guard, same pattern as is_aether_pid).
 is_zeptun_pid() {
@@ -742,7 +775,7 @@ monitor_network = true
 [dns]
 $dns_block
 EOF
-  chmod 600 "$ZEPTON_CONF" 2>/dev/null || true
+  chmod 600 "$ZEPTUN_CONF" 2>/dev/null || true
 }
 
 rotate_zeptun_logs_if_needed() {
@@ -843,28 +876,23 @@ zeptun_watchdog() {
 }
 
 cmd_system_route_start() {
+  if [[ "$SYSROUTE_ENABLED" != "1" ]]; then
+    SYSROUTE_ENABLED="1"
+    save_config
+  fi
+
   zeptun_state_read
   if [[ "$Z_STATE" == "STARTING" || "$Z_STATE" == "RUNNING" ]]; then
     echo "System routing already ${Z_STATE}."
     return 0
   fi
 
-  if [[ "$SYSROUTE_ENABLED" != "1" ]]; then
-    echo "System routing is disabled. Enable it first." >&2
-    return 1
-  fi
-
   local zbin
-  zbin=$(zeptun_discover_bin) || {
+  zbin=$(zeptun_discover_bin_cached) || {
     zeptun_state_write "FAILED" "" "$Z_RETRIES" "zeptun binary not found"
-    echo "Zeptun binary not found. Install it (see README) or set zeptun_bin." >&2
+    echo "Zeptun binary not found. Install it (Routing tab) or set zeptun_bin." >&2
     return 1
   }
-  if ! zeptun_has_cap_net_admin "$zbin"; then
-    zeptun_state_write "FAILED" "" "$Z_RETRIES" "missing CAP_NET_ADMIN"
-    echo "Zeptun lacks CAP_NET_ADMIN (needed to create the TUN device). Grant it with: sudo setcap cap_net_admin+ep $zbin" >&2
-    return 1
-  fi
 
   if ! is_running; then
     zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether not running"
@@ -873,16 +901,41 @@ cmd_system_route_start() {
   fi
 
   # Loop prevention requires the core to mark its sockets so zeptun's policy
-  # rules keep them out of the TUN. Enable the mark and restart the core if
-  # it was launched without it; the mark is inert in normal (non-TUN) mode.
+  # rules keep them out of the TUN. The core needs CAP_NET_ADMIN to set SO_MARK.
+  local abin
+  abin=$(detect_aether_bin) || {
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether binary not found"
+    return 1
+  }
+  if ! ensure_cap_net_admin "$abin" "Aether core"; then
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "core lacks CAP_NET_ADMIN"
+    return 1
+  fi
+
+  local core_needs_restart=0
   if [[ "$MARK" != "1" && "$MARK" != "0xff" ]]; then
     zeptun_log "enabling firewall mark on the core for loop prevention"
     echo "Enabling the core's firewall mark (SO_MARK 0xff) for loop prevention…"
     MARK="1"
     save_config
-    if is_running; then
-      cmd_restart
+    core_needs_restart=1
+  fi
+
+  # Even if MARK=1 was already saved, verify the running instance actually has --mark.
+  if is_running; then
+    local apid
+    apid=$(get_running_pid || true)
+    if [[ -n "$apid" && -r "/proc/$apid/cmdline" ]]; then
+      local acmd
+      acmd=$(tr '\0' ' ' < "/proc/$apid/cmdline" 2>/dev/null || true)
+      if [[ "$acmd" != *"--mark"* ]]; then
+        core_needs_restart=1
+      fi
     fi
+  fi
+
+  if (( core_needs_restart == 1 )) && is_running; then
+    cmd_restart
   fi
 
   # Aether must actually pass traffic through its SOCKS5 endpoint before we
@@ -901,6 +954,14 @@ cmd_system_route_start() {
     return 1
   fi
 
+  # Everything else is ready — now (and only now) ask for privileges, so a
+  # dismissed prompt never wastes the user's time on a setup that would fail
+  # anyway.
+  if ! zeptun_ensure_cap "$zbin"; then
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "missing CAP_NET_ADMIN"
+    return 1
+  fi
+
   rotate_zeptun_logs_if_needed
   zeptun_write_conf
 
@@ -908,7 +969,7 @@ cmd_system_route_start() {
   zeptun_log "launching $zbin -c $ZEPTUN_CONF"
 
   cd "$RUN_DIR"
-  setsid "$zbin" run -c "$ZEPTUN_CONF" </dev/null >>"$ZEPTUN_LOG_FILE" 2>&1 &
+  "$zbin" run -c "$ZEPTUN_CONF" </dev/null >>"$ZEPTUN_LOG_FILE" 2>&1 &
   local pid=$!
   printf '%s\n%s\n' "$pid" "$zbin" > "$ZEPTUN_PID_FILE"
   disown "$pid" 2>/dev/null || true
@@ -993,6 +1054,7 @@ cmd_system_route_stop() {
 }
 
 cmd_system_route_status() {
+  zeptun_watchdog
   zeptun_state_read
   local zstate="$Z_STATE"
   [[ "$SYSROUTE_ENABLED" != "1" ]] && { zstate="DISABLED"; Z_ERR=""; }
@@ -1772,15 +1834,11 @@ cmd_zeptun_install() {
   echo "Installed Zeptun ${ZEPTUN_VERSION} to $BIN_DIR/zeptun"
 
   # Minimum privilege: the engine only needs CAP_NET_ADMIN (TUN device,
-  # netlink routes/rules). Grant it to the managed binary when possible;
-  # otherwise surface the exact command — never run the plugin itself as root.
-  if ! zeptun_has_cap_net_admin "$BIN_DIR/zeptun"; then
-    if command -v setcap &>/dev/null && sudo -n setcap cap_net_admin+ep "$BIN_DIR/zeptun" 2>/dev/null; then
-      echo "Granted CAP_NET_ADMIN to the Zeptun binary."
-    else
-      echo "Zeptun needs CAP_NET_ADMIN to create the TUN device. Grant it once:" >&2
-      echo "  sudo setcap cap_net_admin+ep $BIN_DIR/zeptun" >&2
-    fi
+  # netlink routes/rules). Attempt the grant non-interactively first, then
+  # via the polkit prompt; if neither works, surface the exact command —
+  # the plugin itself never runs as root.
+  if ! zeptun_ensure_cap "$BIN_DIR/zeptun"; then
+    zeptun_log "CAP_NET_ADMIN not granted during install"
   fi
 
   # If the engine is already running, bounce it onto the new binary
@@ -1809,6 +1867,12 @@ cmd_set_config() {
   local val="${2:-}"
 
   [[ -n "$key" ]] || { echo "Key required" >&2; return 1; }
+
+  # Normalize common boolean representations for switch-style settings.
+  case "$val" in
+    true|yes|on)  val="1" ;;
+    false|no|off) val="0" ;;
+  esac
 
   case "$key" in
     bin)

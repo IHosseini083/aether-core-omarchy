@@ -7,12 +7,12 @@ Deep documentation for the `cluvex.aether` Omarchy shell plugin. For a quick sta
 ```
 ~/.config/omarchy/plugins/cluvex.aether/
 ├── manifest.json        # Plugin contract (kind: bar-widget)
-├── Panel.qml            # Entry point: bar button + popup panel (4 tabs)
+├── Panel.qml            # Entry point: bar button + popup panel (5 tabs)
 ├── Service.qml          # Quickshell Process/Timer layer driving aether-ctl
 ├── Model.js             # JSON parsing, formatting, log colorization
 ├── AetherIcon.qml       # Vector shield icon (bar + hero), state-aware
-├── bin/aether-ctl       # Bash CLI: status, lifecycle, config, install
-└── systemd/aether.service  # Optional user unit (uses `aether-ctl foreground`)
+├── bin/aether-ctl       # Bash CLI: status, lifecycle, config, install, system routing
+└── systemd/             # Optional user units (aether.service, zeptun.service)
 ```
 
 Data flow: `Panel.qml` instantiates `Service.qml`, which shells out to `bin/aether-ctl`. The ctl script is the single source of truth — it owns `~/.config/omarchy-aether/config.env`, starts/stops the daemon, and prints a JSON status blob on stdout that `Model.parseStatus` consumes. No Quickshell process is started by the plugin; it loads inside the Omarchy shell.
@@ -37,6 +37,13 @@ aether-ctl remove-core <path>         # delete a non-active core (managed dir re
 aether-ctl logs [N]                   # last N log lines (default 60)
 aether-ctl clear-logs|clear-cache     # housekeeping (cache = lastconn/secondary)
 aether-ctl probe                      # raw curl trace through the tunnel
+aether-ctl system-route status        # Zeptun system-routing state (JSON)
+aether-ctl system-route start         # route all traffic through Aether via Zeptun
+aether-ctl system-route stop|restart  # bring routing down / bounce it
+aether-ctl zeptun-logs [N]            # last N lines of the engine log
+aether-ctl zeptun-clear-logs          # truncate the engine log
+aether-ctl zeptun-install             # download pinned Zeptun release (checksum-verified)
+aether-ctl zeptun-remove              # delete the managed engine binary
 ```
 
 ### `set` keys
@@ -84,6 +91,15 @@ aether-ctl probe                      # raw curl trace through the tunnel
 | `log_level` | `info` | `--log-level <level>` | ✓ Advanced |
 | `extra_args` | empty | appended verbatim | ✓ Advanced |
 | `bin` | empty (auto-discover) | — (binary selector) | ✓ Settings |
+| `sysroute_enabled` | `0` (off), `1` | — (master switch; `1` also starts routing when Aether is up) | ✓ Routing |
+| `sysroute_ipv6` | `0` (IPv4-only + v6 blocked), `1` (dual stack) | — | ✓ Routing |
+| `sysroute_dns_mode` | `systemd_resolved`, `hijack`, `off` | — (engine `[dns]` section) | ✓ Routing |
+| `sysroute_udp_mode` | `udp` (native), `tcp` (UDP over TCP) | — (engine `udp_mode`) | ✓ Routing |
+| `sysroute_persistent` | `0`, `1` (auto-start with Aether, bounded retries) | — | ✓ Routing |
+| `sysroute_exclude` | empty | — (extra engine `exclude` CIDRs) | ✓ Routing |
+| `zeptun_bin` | empty (auto-discover) | — (engine binary selector) | ✓ Routing |
+
+`sysroute_*` and `zeptun_bin` keys never hot-restart the Aether core. Changing one while routing is active bounces only the Zeptun engine.
 
 All documented upstream flags now have a `set` key (see table above) except the identity-path overrides `--config`, `--wg-config`, `--masque-config` — the plugin manages those paths itself; pass overrides through `extra_args` if you must. Env-only knobs without a flag (the `AETHER_TOR_*` timing/check/log tuning) are likewise out of scope; `tor_country` is exposed because bridge requests are region-sensitive.
 
@@ -109,7 +125,14 @@ All documented upstream flags now have a `set` key (see table above) except the 
   "tls_groups": "", "routes_file": "", "tor_bind": "", "tor_dir": "",
   "tor_bridges": "", "tor_bridge": "", "tor_pt": "", "tor_pt_dir": "",
   "tor_country": "", "access_id": "", "access_secret": "", "access_token": "",
-  "access_email": "", "discovered_cores": ["/path/to/aether"]
+  "access_email": "", "discovered_cores": ["/path/to/aether"],
+  "zeptun_state": "DISABLED", "zeptun_available": true,
+  "zeptun_binary": "/home/user/.local/share/omarchy-aether/bin/zeptun",
+  "zeptun_pid": "", "zeptun_tun": "zeptun0", "zeptun_has_cap_net_admin": false,
+  "zeptun_retries": 0, "zeptun_uptime_s": 0, "zeptun_error": "",
+  "sysroute_enabled": false, "sysroute_ipv6": false,
+  "sysroute_dns_mode": "systemd_resolved", "sysroute_udp_mode": "udp",
+  "sysroute_persistent": false, "sysroute_exclude": ""
 }
 ```
 
@@ -125,7 +148,45 @@ All state lives in two files, both rewritten atomically on every change: `~/.con
 
 ### Core install
 
-`aether-ctl install` maps `uname -m` to the official release asset (`aether-linux-x86_64.tar.gz`, `aether-linux-arm64.tar.gz`, `aether-linux-armv7.tar.gz`), downloads the pinned release `AETHER_CORE_VERSION` from `github.com/CluvexStudio/Aether/releases/download/<version>`, verifies the archive against the SHA-256 checksums committed in `bin/aether-ctl`, and extracts only the expected members (rejecting absolute paths, `..`, links, and extra members) into `~/.local/share/omarchy-aether/bin/`, then pins it as the active core. If GitHub is unreachable directly while the tunnel is up, it retries through the local SOCKS5 port. Downloads are capped at 64 MiB. Upgrades require bumping `AETHER_CORE_VERSION` and its committed checksums.
+`aether-ctl install` maps `uname -m` to the official release asset (`aether-linux-x86_64.tar.gz`, `aether-linux-arm64.tar.gz`, `aether-linux-armv7.tar.gz`), downloads the pinned release `AETHER_CORE_VERSION` from `github.com/CluvexStudio/Aether/releases/download/<version>`, verifies the archive against the SHA-256 checksums committed in `bin/aether-ctl`, and extracts only the expected members (rejecting absolute paths, `..`, links, and extra members) into `~/.local/share/omarchy-aether/bin/`, then pins it as the active core. If GitHub is unreachable directly while the tunnel is up, it retries through the local SOCKS5 port. Downloads are capped at 64 MiB. Upgrades require bumping `AETHER_CORE_VERSION` and its committed checksums. Core install/remove only touch the core's own files — the managed Zeptun binary in the same directory is preserved.
+
+## System-wide routing (Zeptun)
+
+Optional layer on top of the normal tunnel, off by default:
+
+```
+Applications → Zeptun TUN (zeptun0) → Zeptun SOCKS5 client → Aether local SOCKS5 (127.0.0.1:<socks_port>) → Aether tunnel
+```
+
+Normal mode never changes; Zeptun runs only on explicit request and only while Aether passes traffic.
+
+### Engine install
+
+`aether-ctl zeptun-install` maps `uname -m` to the standalone binary asset (`zeptun-linux-x86_64`, `zeptun-linux-arm64`, `zeptun-linux-armv7`, `zeptun-linux-i686`), downloads the pinned `ZEPTUN_VERSION` from `github.com/Noisemux/zeptun/releases`, verifies the committed SHA-256, and installs it atomically to `~/.local/share/omarchy-aether/bin/zeptun`. Discovery order: `zeptun_bin` config, that managed path, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `which -a zeptun`. Every candidate is validated by running `zeptun help` (bounded, 3 s) and checking for the flags this integration relies on; results are cached for 60 s so the status poll never stalls. `zeptun-remove` deletes the managed binary.
+
+### Privileges
+
+Zeptun needs exactly one capability: **`CAP_NET_ADMIN`** — creating the TUN device and installing addresses/routes/policy rules via netlink. `zeptun-install` attempts `sudo -n setcap cap_net_admin+ep` non-interactively and otherwise prints the exact command for the user to run once. The plugin itself never runs as root. No `CAP_NET_RAW` and no other privileges are requested; ICMP handling runs over the TUN file descriptor, not raw sockets. `aether-ctl status` reports `zeptun_has_cap_net_admin` so the UI can show what's missing before a start attempt fails.
+
+### Lifecycle & watchdog
+
+States: `DISABLED → STOPPED → STARTING → RUNNING → STOPPING → FAILED`, persisted in `data/zeptun.state` (state, pid, timestamp, retries, error). `DISABLED` is derived whenever `sysroute_enabled` is off.
+
+- `system-route start` refuses to run without: engine present, `CAP_NET_ADMIN`, Aether running, and the SOCKS5 endpoint passing a bounded probe (3 attempts). It generates `data/zeptun.toml` (preset `desktop`, tun `zeptun0`, `auto_route`, table `8891`, fwmark `255`, strict route, baseline + user + endpoint excludes, per-config DNS/UDP), launches the engine with `setsid`, and marks `RUNNING` only after: TUN device visible (≤ 5 s), policy rule for table `8891` present (≤ 2 s), and an unproxied end-to-end check returning `warp=on` (3 attempts). Any failure → teardown → `FAILED` with the engine log's last error line.
+- The watchdog runs inside `status` (bounded, cheap): detects a dead engine (`RUNNING` with no live, identity-verified PID) → cleans up → bounded retry (crash counter, 2/4/8 s backoff, max 3, reset on success); reaps `STARTING` > 45 s and `STOPPING` > 15 s; and in persistent mode spawns a detached `system-route start` whenever Aether is connected and the engine is `STOPPED`/retryable-`FAILED`. Heavy work always happens in the detached attempt, so `status` and IPC stay prompt.
+- `aether-ctl stop` (and any Aether stop path) brings system routing down **first**; `system-route stop` escalates `SIGINT → SIGTERM → SIGKILL` on the identity-verified PID only, then removes leftover state.
+
+### Routing & DNS behavior
+
+- Routing uses Zeptun's native `auto_route` against a generated TOML config — the integration writes no route or firewall commands of its own beyond teardown of its two reserved resources: the `zeptun0` interface and policy rules for table `8891`. No global flushes, ever.
+- **Loop prevention:** the core is (re)started with `--mark 0xff` (the mark is inert without TUN routing; the panel surfaces this on first activation). Zeptun's policy rules exclude fwmark `255` packets, so the core's upstream sockets exit directly. Additionally the engine's established remote IPs are probed (`ss`, 2 s bound) and excluded, and LAN/link-local/multicast ranges are always excluded.
+- **DNS modes:** `systemd_resolved` (default) hands DNS to `resolvectl`; `hijack` captures all DNS inside the TUN; `off` leaves DNS to follow normal (routed) traffic. The plugin never edits `/etc/resolv.conf`.
+- **IPv6:** with `sysroute_ipv6` off, the TUN carries IPv4 only and strict route **blocks** IPv6 rather than leaking it; turn on IPv4+IPv6 to carry both families.
+- Zeptun's own log streams to `data/zeptun.log` (rotated at 2 MB, same as the core log); the Live Logs tab switches views.
+
+### Omarchy dev note
+
+`omarchy plugin validate` rejects a plugin directory that is itself a symlink. With the development symlink at `~/.config/omarchy/plugins/cluvex.aether`, run the validator against the real working tree instead. Never keep a second copy of the plugin inside `~/.config/omarchy/plugins/` — two manifests with the same id collide in the registry scan and the shell silently loads whichever sorts last.
 
 ## Omarchy integration
 

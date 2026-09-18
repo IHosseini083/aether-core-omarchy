@@ -42,6 +42,15 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 
 - Polls the last 100 lines of the daemon log with color-coded levels (errors, warnings, successes) and auto-tail, plus copy and clear.
 
+**Popup panel — Routing tab (optional system-wide routing)**
+
+- Route **all** system traffic through the Aether tunnel with the [Zeptun](https://github.com/Noisemux/zeptun) TUN engine: `system traffic → Zeptun TUN → Aether local SOCKS5 → Aether tunnel`.
+- Completely optional and **off by default** — normal Aether behavior is untouched until you enable it.
+- One-click download of the pinned, checksum-verified Zeptun release into the plugin's data directory (a system-wide `/usr/local/bin/zeptun` install is discovered and used if you prefer it).
+- Start / Stop / Restart controls with live state (starting, active, failed) and tun/pid/uptime details.
+- IPv4 vs IPv4+IPv6, DNS mode (systemd-resolved handover, DNS hijack, or off), native vs TCP-carried UDP, persistent auto-start, and route exclusions.
+- The Routing tab only appears as options; until you flip the master switch, nothing about your network changes.
+
 **Missing-core handling**
 
 - If no Aether binary is found, the panel shows a warning and offers to download and install the official release for your architecture automatically (`x86_64`, `arm64`, `armv7`), falling back to downloading through the active tunnel if GitHub is unreachable directly.
@@ -141,6 +150,40 @@ systemctl --user daemon-reload
 systemctl --user enable --now aether
 ```
 
+To have **system-wide routing** start with it, install `systemd/zeptun.service` the same way after enabling routing in the panel.
+
+## System-wide routing (Zeptun, optional)
+
+The Routing tab can route every application's traffic through the tunnel — not just proxy-aware apps — using [Zeptun](https://github.com/Noisemux/zeptun), a userspace tun2socks engine, pointed at Aether's local SOCKS5 port.
+
+**Setup**
+
+1. Open the **Routing** tab and press **Download & Install Zeptun** (or install Zeptun yourself; the plugin discovers `~/.local/share/omarchy-aether/bin/zeptun`, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `$PATH`, or set a path in the tab).
+2. Grant the engine the **one** capability it needs, `CAP_NET_ADMIN` (it creates the TUN device and installs policy routes):
+   ```sh
+   sudo setcap cap_net_admin+ep ~/.local/share/omarchy-aether/bin/zeptun
+   ```
+   The plugin never runs as root and attempts this grant non-interactively for you when possible.
+3. Flip **System-wide routing** on. The engine starts only when Aether is connected; flipping it off (or stopping Aether) always brings routing down first.
+
+**Safety model**
+
+- The engine is only marked `RUNNING` after the TUN device, the routing policy, **and** a real end-to-end traffic check all succeed; any failure tears the engine down and restores the previous network state before reporting an error.
+- Teardown removes **only** what this integration created — the `zeptun0` interface and policy rules for table `8891`. Routes, rules, and firewalls outside it are never touched.
+- Routing loops are prevented by the core's firewall mark (`SO_MARK 0xff`, enabled automatically and inert without TUN mode) plus live exclusion of Aether's own endpoints. LAN, link-local, and multicast ranges are always excluded.
+- IPv4-only mode **blocks** IPv6 through the routing policy rather than leaking it; choose IPv4+IPv6 to carry both families.
+- Crash detection runs on every status poll; restarts are bounded (three attempts with backoff) — a broken setup fails visibly instead of flapping.
+
+**Rollback**
+
+Flip the master switch off (or `omarchy-shell cluvex.aether systemRouteStop`), then remove the capability if you want:
+
+```sh
+sudo setcap -r ~/.local/share/omarchy-aether/bin/zeptun
+```
+
+`aether-ctl zeptun-remove` deletes the managed engine binary; disabling the tab's switch leaves nothing running and no routing state behind.
+
 ## IPC
 
 Control the plugin from scripts or Hyprland keybindings:
@@ -152,15 +195,20 @@ omarchy-shell cluvex.aether start        # connect
 omarchy-shell cluvex.aether stop         # disconnect
 omarchy-shell cluvex.aether restart
 omarchy-shell cluvex.aether refresh      # re-probe status + logs
+omarchy-shell cluvex.aether systemRouteStatus   # system routing state
+omarchy-shell cluvex.aether systemRouteStart    # route all traffic (needs setup above)
+omarchy-shell cluvex.aether systemRouteStop
+omarchy-shell cluvex.aether systemRouteRestart
 ```
 
 ## Data and file paths
 
 | Path | Purpose |
 | --- | --- |
-| `~/.local/share/omarchy-aether/bin/` | Cores downloaded by the plugin |
-| `~/.local/share/omarchy-aether/data/` | Working directory for the core (identity files, `aether.toml`, gateway cache) |
-| `~/.local/share/omarchy-aether/aether.log` | Daemon log shown in Live Logs |
+| `~/.local/share/omarchy-aether/bin/` | Cores **and the managed Zeptun engine** downloaded by the plugin |
+| `~/.local/share/omarchy-aether/data/` | Working directory for the core (identity files, `aether.toml`, gateway cache, generated `zeptun.toml`, zeptun state) |
+| `~/.local/share/omarchy-aether/aether.log` | Daemon log shown in Live Logs (Aether view) |
+| `~/.local/share/omarchy-aether/zeptun.log` | Routing engine log shown in Live Logs (Zeptun view) |
 | `~/.config/omarchy-aether/config.env` | Plugin settings (source of truth for all options) |
 
 Identity files (`aether.toml`, `aether-masque.toml`, last-connection cache) are created by the Aether core inside the data directory and are never touched by plugin removal.
@@ -175,8 +223,8 @@ Before removing: disconnect the tunnel first if you want a clean teardown (remov
 
 ## Security notes
 
-- Plugins run unsandboxed inside the Omarchy shell with your user permissions. This plugin only shells out to its own `bin/aether-ctl`, `curl`, `tar`, `jq`, and `systemctl`, and never requests root.
-- Release downloads are pinned to a fixed core version, fetched over HTTPS from GitHub, and verified against SHA-256 checksums committed in `bin/aether-ctl` before anything is extracted; see [Core](#core) and [DOCS.md](DOCS.md).
+- Plugins run unsandboxed inside the Omarchy shell with your user permissions. This plugin only shells out to its own `bin/aether-ctl`, `curl`, `tar`, `jq`, `ss`, and `systemctl`, and never requests root; the one privileged step (granting `CAP_NET_ADMIN` to the Zeptun binary) is a one-time `sudo setcap` you run or approve.
+- Release downloads (Aether core and Zeptun engine) are pinned to fixed versions, fetched over HTTPS from GitHub, and verified against SHA-256 checksums committed in `bin/aether-ctl` before anything is used; see [Core](#core) and [DOCS.md](DOCS.md).
 - The local SOCKS5 proxy has no authentication and binds to `127.0.0.1` only. Do not expose the port to your network.
 
 ## License
