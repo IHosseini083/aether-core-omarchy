@@ -357,7 +357,7 @@ Panel {
     property string labelText: ""
     property string hintText: ""
     property bool secret: false
-    readonly property string current: key !== "" ? aether[key] : ""
+    readonly property string current: key !== "" && aether[key] !== undefined ? String(aether[key]) : ""
 
     width: parent.width
     spacing: Style.space(4)
