@@ -17,6 +17,7 @@ function getHeroPhrase(index) {
 
 function parseStatus(rawJson) {
   var defaultState = {
+    plugin_version: "1.6.0",
     installed: false,
     binary: "",
     binary_version: "",
@@ -82,6 +83,7 @@ function parseStatus(rawJson) {
     zeptun_state: "DISABLED",
     zeptun_available: false,
     zeptun_binary: "",
+    zeptun_version: "",
     zeptun_pid: "",
     zeptun_tun: "zeptun0",
     zeptun_has_cap_net_admin: false,
@@ -117,6 +119,7 @@ function parseStatus(rawJson) {
   try {
     var parsed = JSON.parse(rawJson);
     return {
+      plugin_version: String(parsed.plugin_version || "1.6.0"),
       installed: parsed.installed === true,
       binary: String(parsed.binary || ""),
       binary_version: String(parsed.binary_version || ""),
@@ -182,6 +185,7 @@ function parseStatus(rawJson) {
       zeptun_state: String(parsed.zeptun_state || "DISABLED"),
       zeptun_available: parsed.zeptun_available === true,
       zeptun_binary: String(parsed.zeptun_binary || ""),
+      zeptun_version: String(parsed.zeptun_version || ""),
       zeptun_pid: String(parsed.zeptun_pid || ""),
       zeptun_tun: String(parsed.zeptun_tun || "zeptun0"),
       zeptun_has_cap_net_admin: parsed.zeptun_has_cap_net_admin === true,

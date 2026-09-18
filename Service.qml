@@ -8,6 +8,7 @@ Item {
   id: root
 
   // Core status
+  property string pluginVersion: "1.6.0"
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""
@@ -81,6 +82,7 @@ Item {
   property string zeptun_state: "DISABLED"
   property bool zeptun_available: false
   property string zeptun_binary: ""
+  property string zeptun_version: ""
   property string zeptun_pid: ""
   property string zeptun_tun: "zeptun0"
   property bool zeptun_has_cap_net_admin: false
@@ -303,6 +305,7 @@ Item {
       root.refreshing = false
       if (code === 0 && root._statusOutput.length > 0) {
         var data = Model.parseStatus(root._statusOutput)
+        root.pluginVersion = data.plugin_version
         root.installed = data.installed
         root.binary = data.binary
         root.binaryVersion = data.binary_version
@@ -370,6 +373,7 @@ Item {
         root.zeptun_state = data.zeptun_state
         root.zeptun_available = data.zeptun_available
         root.zeptun_binary = data.zeptun_binary
+        root.zeptun_version = data.zeptun_version
         root.zeptun_pid = data.zeptun_pid
         root.zeptun_tun = data.zeptun_tun
         root.zeptun_has_cap_net_admin = data.zeptun_has_cap_net_admin

@@ -281,6 +281,53 @@ Panel {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
           }
+
+          // Versions Footer
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+              text: "Plugin v" + (aether.pluginVersion !== "" ? aether.pluginVersion : "1.6.0")
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              color: root.dim
+            }
+
+            Text {
+              text: "·"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              color: root.dim
+            }
+
+            Text {
+              text: aether.binaryVersion !== "" ? aether.binaryVersion : "Aether core missing"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              color: aether.installed ? root.dim : root.urgent
+            }
+
+            Text {
+              visible: aether.zeptun_available && aether.zeptun_version !== ""
+              text: "·"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              color: root.dim
+            }
+
+            Text {
+              visible: aether.zeptun_available && aether.zeptun_version !== ""
+              text: aether.zeptun_version
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              color: root.dim
+            }
+
+            Item { Layout.fillWidth: true }
+          }
         }
       }
 
@@ -866,6 +913,15 @@ Panel {
               enabled: aether.zeptun_available && aether.connected && !aether.actionInProgress
               onToggled: aether.toggleSystemRoute()
             }
+          }
+
+          Text {
+            width: parent.width
+            visible: aether.zeptun_available
+            text: (aether.zeptun_version !== "" ? aether.zeptun_version : "Zeptun") + (aether.zeptun_has_cap_net_admin ? " · CAP_NET_ADMIN" : " · Missing capability")
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: aether.zeptun_has_cap_net_admin ? root.accent : root.urgent
           }
 
           Text {

@@ -336,6 +336,27 @@ get_binary_version() {
   fi
 }
 
+get_plugin_version() {
+  local manifest="$SCRIPT_DIR/../manifest.json"
+  if [[ -f "$manifest" ]]; then
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1
+  else
+    echo "1.6.0"
+  fi
+}
+
+get_zeptun_version() {
+  local binary="$1"
+  [[ -x "$binary" ]] || return 1
+  local ver
+  ver=$("$binary" version 2>/dev/null | head -n1 | awk '{print $1 " " $2}' || true)
+  if [[ -n "$ver" ]]; then
+    echo "$ver"
+  else
+    echo "Unknown version"
+  fi
+}
+
 find_all_cores() {
   # Discovery probes every candidate with `--help`; the status poll would
   # repeat that every few seconds. Cache results for a short TTL and drop
@@ -1197,12 +1218,18 @@ cmd_system_route_status() {
   [[ "$zstate" != "RUNNING" ]] && zpid=""
   local cap="false"
   [[ -n "$zbin" ]] && zeptun_has_cap_net_admin "$zbin" && cap="true"
+  local zversion=""
+  [[ -n "$zbin" ]] && zversion=$(get_zeptun_version "$zbin")
+  local plug_version
+  plug_version=$(get_plugin_version)
   local now uptime=0
   now=$(date +%s)
   [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && uptime=$(( now - Z_TS ))
 
   cat <<EOF
 {
+  "plugin_version": $(json_str "$plug_version"),
+  "zeptun_version": $(json_str "$zversion"),
   "zeptun_state": $(json_str "$zstate"),
   "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
   "zeptun_binary": $(json_str "$zbin"),
@@ -1549,9 +1576,14 @@ cmd_status() {
   znow=$(date +%s)
   [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && zuptime=$(( znow - Z_TS ))
   [[ "$zstate" != "RUNNING" ]] && zpid=""
+  local zversion=""
+  [[ -n "$zbin" ]] && zversion=$(get_zeptun_version "$zbin")
+  local plug_version
+  plug_version=$(get_plugin_version)
 
   cat <<EOF
 {
+  "plugin_version": $(json_str "$plug_version"),
   "installed": $installed,
   "binary": $(json_str "$bin"),
   "binary_version": $(json_str "$bin_version"),
@@ -1572,15 +1604,15 @@ cmd_status() {
   "ip_mode": $(json_str "$IP_MODE"),
   "h2": $( [[ "$H2" == "1" ]] && echo "true" || echo "false" ),
   "fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
+  "fragment_size": $(json_str "$FRAGMENT_SIZE"),
+  "fragment_delay": $(json_str "$FRAGMENT_DELAY"),
+  "extra_args": $(json_str "$EXTRA_ARGS"),
   "quick_reconnect": $( [[ "$QUICK_RECONNECT" == "1" ]] && echo "true" || echo "false" ),
-  "mark_enabled": $( [[ "$MARK" == "1" || "$MARK" == "0xff" ]] && echo "true" || echo "false" ),
+  "mark_enabled": $( [[ "$MARK" == "1" ]] && echo "true" || echo "false" ),
   "no_quic_v2": $( [[ "$NO_QUIC_V2" == "1" ]] && echo "true" || echo "false" ),
   "ech": $(json_str "$ECH"),
   "no_data_check": $( [[ "$NO_DATA_CHECK" == "1" ]] && echo "true" || echo "false" ),
   "keepalive": $(json_num "$KEEPALIVE" 5),
-  "fragment_size": $(json_str "$FRAGMENT_SIZE"),
-  "fragment_delay": $(json_str "$FRAGMENT_DELAY"),
-  "extra_args": $(json_str "$EXTRA_ARGS"),
   "peer": $(json_str "$PEER"),
   "wiw_outer": $(json_str "$WIW_OUTER"),
   "wiw_inner": $(json_str "$WIW_INNER"),
@@ -1615,6 +1647,7 @@ cmd_status() {
   "zeptun_state": $(json_str "$zstate"),
   "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
   "zeptun_binary": $(json_str "$zbin"),
+  "zeptun_version": $(json_str "$zversion"),
   "zeptun_pid": $(json_str "${zpid:-}"),
   "zeptun_tun": $(json_str "$ZEPTUN_TUN"),
   "zeptun_has_cap_net_admin": $zcap,
