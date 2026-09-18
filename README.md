@@ -48,7 +48,7 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 - Completely optional and **off by default** — normal Aether behavior is untouched until you enable it.
 - One-click download of the pinned, checksum-verified Zeptun release into the plugin's data directory (a system-wide `/usr/local/bin/zeptun` install is discovered and used if you prefer it).
 - Start / Stop / Restart controls with live state (starting, active, failed) and tun/pid/uptime details.
-- IPv4 vs IPv4+IPv6, DNS mode (systemd-resolved handover, DNS hijack, or off), native vs TCP-carried UDP, persistent auto-start, and route exclusions.
+- Comprehensive engine controls: Engine profile (Desktop, Mobile, Server), TUN MTU, IPv4 vs IPv4+IPv6, DNS mode & custom in-tunnel DNS servers (stops ISP DNS poisoning for blocked sites like YouTube and X), Fake-IP remote resolution, native vs TCP-carried UDP, persistent auto-start, and route exclusions.
 - The Routing tab only appears as options; until you flip the master switch, nothing about your network changes.
 
 **Missing-core handling**

@@ -90,6 +90,10 @@ Item {
   property bool sysroute_enabled: false
   property bool sysroute_ipv6: false
   property string sysroute_dns_mode: "systemd_resolved"
+  property string sysroute_dns_servers: "1.1.1.1, 8.8.8.8"
+  property bool sysroute_fake_ip: false
+  property string sysroute_preset: "desktop"
+  property int sysroute_mtu: 1500
   property string sysroute_udp_mode: "udp"
   property bool sysroute_persistent: false
   property string sysroute_exclude: ""
@@ -365,6 +369,10 @@ Item {
         root.sysroute_enabled = data.sysroute_enabled
         root.sysroute_ipv6 = data.sysroute_ipv6
         root.sysroute_dns_mode = data.sysroute_dns_mode
+        root.sysroute_dns_servers = data.sysroute_dns_servers
+        root.sysroute_fake_ip = data.sysroute_fake_ip
+        root.sysroute_preset = data.sysroute_preset
+        root.sysroute_mtu = data.sysroute_mtu
         root.sysroute_udp_mode = data.sysroute_udp_mode
         root.sysroute_persistent = data.sysroute_persistent
         root.sysroute_exclude = data.sysroute_exclude

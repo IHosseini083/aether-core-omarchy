@@ -93,7 +93,11 @@ aether-ctl zeptun-remove              # delete the managed engine binary
 | `bin` | empty (auto-discover) | — (binary selector) | ✓ Settings |
 | `sysroute_enabled` | `0` (off), `1` | — (master switch; `1` also starts routing when Aether is up) | ✓ Routing |
 | `sysroute_ipv6` | `0` (IPv4-only + v6 blocked), `1` (dual stack) | — | ✓ Routing |
+| `sysroute_preset` | `desktop` (default), `mobile`, `server` | — (Zeptun performance & memory preset) | ✓ Routing |
+| `sysroute_mtu` | `1500` (default, 576-65535) | — (TUN device MTU) | ✓ Routing |
 | `sysroute_dns_mode` | `systemd_resolved`, `hijack`, `off` | — (engine `[dns]` section) | ✓ Routing |
+| `sysroute_dns_servers` | `1.1.1.1, 8.8.8.8` | — (in-tunnel DNS servers to prevent ISP poisoning) | ✓ Routing |
+| `sysroute_fake_ip` | `0` (off), `1` (on) | — (remote domain resolution via SOCKS5) | ✓ Routing |
 | `sysroute_udp_mode` | `udp` (native), `tcp` (UDP over TCP) | — (engine `udp_mode`) | ✓ Routing |
 | `sysroute_persistent` | `0`, `1` (auto-start with Aether, bounded retries) | — | ✓ Routing |
 | `sysroute_exclude` | empty | — (extra engine `exclude` CIDRs) | ✓ Routing |
@@ -185,7 +189,8 @@ States: `DISABLED → STOPPED → STARTING → RUNNING → STOPPING → FAILED`,
 
 - Routing uses Zeptun's native `auto_route` against a generated TOML config — the integration writes no route or firewall commands of its own beyond teardown of its two reserved resources: the `zeptun0` interface and policy rules for table `8891`. No global flushes, ever.
 - **Loop prevention:** the core is (re)started with `--mark 0xff` (the mark is inert without TUN routing; the panel surfaces this on first activation). Zeptun's policy rules exclude fwmark `255` packets, so the core's upstream sockets exit directly. Additionally the engine's established remote IPs are probed (`ss`, 2 s bound) and excluded, and LAN/link-local/multicast ranges are always excluded.
-- **DNS modes:** `systemd_resolved` (default) hands DNS to `resolvectl`; `hijack` captures all DNS inside the TUN; `off` leaves DNS to follow normal (routed) traffic. The plugin never edits `/etc/resolv.conf`.
+- **DNS handling & anti-poisoning:** in `systemd_resolved` mode (default), the plugin configures `resolvectl` on the TUN link with routing domain `~.` pointing at the configured `sysroute_dns_servers` (default `1.1.1.1, 8.8.8.8`) and flushes cache on connect/disconnect. This prevents local ISP DNS poisoning (which blocks sites like YouTube and X) without editing `/etc/resolv.conf`. Alternatively, `fake_ip` resolves domains remotely via SOCKS5, and `hijack` routes port 53 into the tunnel.
+- **Engine tuning:** `sysroute_preset` toggles Desktop (high performance), Mobile (lightweight), and Server (high concurrency) engine profiles; `sysroute_mtu` allows tuning the interface MTU to mitigate network fragmentation.
 - **IPv6:** with `sysroute_ipv6` off, the TUN carries IPv4 only and strict route **blocks** IPv6 rather than leaking it; turn on IPv4+IPv6 to carry both families.
 - Zeptun's own log streams to `data/zeptun.log` (rotated at 2 MB, same as the core log); the Live Logs tab switches views.
 

@@ -91,6 +91,10 @@ function parseStatus(rawJson) {
     sysroute_enabled: false,
     sysroute_ipv6: false,
     sysroute_dns_mode: "systemd_resolved",
+    sysroute_dns_servers: "1.1.1.1, 8.8.8.8",
+    sysroute_fake_ip: false,
+    sysroute_preset: "desktop",
+    sysroute_mtu: 1500,
     sysroute_udp_mode: "udp",
     sysroute_persistent: false,
     sysroute_exclude: ""
@@ -177,6 +181,10 @@ function parseStatus(rawJson) {
       sysroute_enabled: parsed.sysroute_enabled === true,
       sysroute_ipv6: parsed.sysroute_ipv6 === true,
       sysroute_dns_mode: String(parsed.sysroute_dns_mode || "systemd_resolved"),
+      sysroute_dns_servers: String(parsed.sysroute_dns_servers || "1.1.1.1, 8.8.8.8"),
+      sysroute_fake_ip: parsed.sysroute_fake_ip === true,
+      sysroute_preset: String(parsed.sysroute_preset || "desktop"),
+      sysroute_mtu: Number(parsed.sysroute_mtu) || 1500,
       sysroute_udp_mode: String(parsed.sysroute_udp_mode || "udp"),
       sysroute_persistent: parsed.sysroute_persistent === true,
       sysroute_exclude: String(parsed.sysroute_exclude || "")

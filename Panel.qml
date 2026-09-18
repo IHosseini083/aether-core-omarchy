@@ -953,16 +953,66 @@ Panel {
         }
       }
 
+      RowLayout {
+        visible: aether.zeptun_available
+        width: parent.width
+        spacing: Style.space(6)
+
+        Button {
+          Layout.fillWidth: true
+          text: "Desktop"
+          selected: aether.sysroute_preset === "desktop"
+          onClicked: aether.setConfig("sysroute_preset", "desktop")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Mobile"
+          selected: aether.sysroute_preset === "mobile"
+          onClicked: aether.setConfig("sysroute_preset", "mobile")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Server"
+          selected: aether.sysroute_preset === "server"
+          onClicked: aether.setConfig("sysroute_preset", "server")
+        }
+      }
+
       AetherDropdown {
         visible: aether.zeptun_available
         key: "sysroute_dns_mode"
         label: "DNS MODE"
         value: aether.sysroute_dns_mode
         options: [
-          { value: "systemd_resolved", label: "Hand over to systemd-resolved" },
+          { value: "systemd_resolved", label: "Hand over to systemd-resolved (~. default route)" },
           { value: "hijack", label: "Hijack all DNS into the tunnel" },
           { value: "off", label: "Off — DNS follows normal routing" }
         ]
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_dns_servers"
+        labelText: "In-tunnel DNS servers (comma-separated)"
+        hintText: "DNS servers reached through the tunnel (e.g. 1.1.1.1, 8.8.8.8, 9.9.9.9). Prevents ISP DNS poisoning."
+      }
+
+      Toggle {
+        visible: aether.zeptun_available
+        width: parent.width
+        label: "Fake-IP resolution"
+        description: "Resolve domain names remotely via SOCKS5 instead of local DNS. Eliminates all ISP DNS poisoning and leaks."
+        checked: aether.sysroute_fake_ip
+        onClicked: aether.setConfig("sysroute_fake_ip", aether.sysroute_fake_ip ? "0" : "1")
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_mtu"
+        labelText: "TUN interface MTU"
+        hintText: "Default is 1500. Lower to 1420 or 1280 if your connection suffers from packet fragmentation."
       }
 
       AetherDropdown {
@@ -972,7 +1022,7 @@ Panel {
         value: aether.sysroute_udp_mode
         options: [
           { value: "udp", label: "Native UDP (SOCKS5 UDP ASSOCIATE)" },
-          { value: "tcp", label: "UDP over TCP" }
+          { value: "tcp", label: "UDP over TCP (recommended for reliability)" }
         ]
       }
 

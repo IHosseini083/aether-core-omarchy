@@ -83,6 +83,10 @@ DEFAULT_ACCESS_EMAIL=""
 DEFAULT_SYSROUTE_ENABLED=0
 DEFAULT_SYSROUTE_IPV6=0
 DEFAULT_SYSROUTE_DNS_MODE="systemd_resolved"
+DEFAULT_SYSROUTE_DNS_SERVERS="1.1.1.1, 8.8.8.8"
+DEFAULT_SYSROUTE_FAKE_IP=0
+DEFAULT_SYSROUTE_PRESET="desktop"
+DEFAULT_SYSROUTE_MTU=1500
 DEFAULT_SYSROUTE_UDP_MODE="udp"
 DEFAULT_SYSROUTE_PERSISTENT=0
 DEFAULT_SYSROUTE_EXCLUDE=""
@@ -148,6 +152,10 @@ load_config() {
   SYSROUTE_ENABLED="${AETHER_CFG_SYSROUTE_ENABLED:-$DEFAULT_SYSROUTE_ENABLED}"
   SYSROUTE_IPV6="${AETHER_CFG_SYSROUTE_IPV6:-$DEFAULT_SYSROUTE_IPV6}"
   SYSROUTE_DNS_MODE="${AETHER_CFG_SYSROUTE_DNS_MODE:-$DEFAULT_SYSROUTE_DNS_MODE}"
+  SYSROUTE_DNS_SERVERS="${AETHER_CFG_SYSROUTE_DNS_SERVERS:-$DEFAULT_SYSROUTE_DNS_SERVERS}"
+  SYSROUTE_FAKE_IP="${AETHER_CFG_SYSROUTE_FAKE_IP:-$DEFAULT_SYSROUTE_FAKE_IP}"
+  SYSROUTE_PRESET="${AETHER_CFG_SYSROUTE_PRESET:-$DEFAULT_SYSROUTE_PRESET}"
+  SYSROUTE_MTU="${AETHER_CFG_SYSROUTE_MTU:-$DEFAULT_SYSROUTE_MTU}"
   SYSROUTE_UDP_MODE="${AETHER_CFG_SYSROUTE_UDP_MODE:-$DEFAULT_SYSROUTE_UDP_MODE}"
   SYSROUTE_PERSISTENT="${AETHER_CFG_SYSROUTE_PERSISTENT:-$DEFAULT_SYSROUTE_PERSISTENT}"
   SYSROUTE_EXCLUDE="${AETHER_CFG_SYSROUTE_EXCLUDE:-$DEFAULT_SYSROUTE_EXCLUDE}"
@@ -217,6 +225,10 @@ save_config() {
     printf 'AETHER_CFG_SYSROUTE_ENABLED=%q\n' "$SYSROUTE_ENABLED"
     printf 'AETHER_CFG_SYSROUTE_IPV6=%q\n' "$SYSROUTE_IPV6"
     printf 'AETHER_CFG_SYSROUTE_DNS_MODE=%q\n' "$SYSROUTE_DNS_MODE"
+    printf 'AETHER_CFG_SYSROUTE_DNS_SERVERS=%q\n' "$SYSROUTE_DNS_SERVERS"
+    printf 'AETHER_CFG_SYSROUTE_FAKE_IP=%q\n' "$SYSROUTE_FAKE_IP"
+    printf 'AETHER_CFG_SYSROUTE_PRESET=%q\n' "$SYSROUTE_PRESET"
+    printf 'AETHER_CFG_SYSROUTE_MTU=%q\n' "$SYSROUTE_MTU"
     printf 'AETHER_CFG_SYSROUTE_UDP_MODE=%q\n' "$SYSROUTE_UDP_MODE"
     printf 'AETHER_CFG_SYSROUTE_PERSISTENT=%q\n' "$SYSROUTE_PERSISTENT"
     printf 'AETHER_CFG_SYSROUTE_EXCLUDE=%q\n' "$SYSROUTE_EXCLUDE"
@@ -638,6 +650,10 @@ zeptun_get_pid() {
 # Remove only resources created by this integration: policy rules pointing at
 # the reserved table and the reserved tun interface. No global flushes ever.
 zeptun_cleanup_network() {
+  if command -v resolvectl &>/dev/null; then
+    resolvectl revert "$ZEPTUN_TUN" 2>/dev/null || true
+    resolvectl flush-caches 2>/dev/null || true
+  fi
   if command -v ip &>/dev/null; then
     while ip rule del lookup "$ZEPTUN_TABLE" 2>/dev/null; do
       zeptun_log "removed stale policy rule for table $ZEPTUN_TABLE"
@@ -701,6 +717,7 @@ zeptun_loop_guards() {
 zeptun_write_conf() {
   local socks_server="127.0.0.1:${SOCKS_PORT}"
   local address v6="${SYSROUTE_IPV6}" dns_mode="${SYSROUTE_DNS_MODE}" udp_mode="${SYSROUTE_UDP_MODE}"
+  local preset="${SYSROUTE_PRESET:-desktop}" mtu="${SYSROUTE_MTU:-1500}"
 
   if [[ "$v6" == "1" ]]; then
     address='address = ["172.19.0.1/30", "fdfe:dcba:9876::1/126"]'
@@ -708,11 +725,31 @@ zeptun_write_conf() {
     address='address = ["172.19.0.1/30"]'
   fi
 
+  local dns_upstream=""
+  local first_dns
+  first_dns=$(echo "$SYSROUTE_DNS_SERVERS" | tr ',' ' ' | awk '{print $1}')
+  [[ -n "$first_dns" ]] && dns_upstream="upstream = \"${first_dns}:53\""
+
+  local fake_ip_val="false"
+  [[ "$SYSROUTE_FAKE_IP" == "1" ]] && fake_ip_val="true"
+
   local dns_block
   case "$dns_mode" in
-    hijack)           dns_block=$'fake_ip = false\nhijack = true\nsystemd_resolved = false' ;;
-    off)              dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = false' ;;
-    *)                dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = true' ;;
+    hijack)
+      dns_block="fake_ip = ${fake_ip_val}
+hijack = true"
+      [[ -n "$dns_upstream" ]] && dns_block+=$'\n'"$dns_upstream"
+      dns_block+=$'\n'"systemd_resolved = false"
+      ;;
+    off)
+      dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = false'
+      ;;
+    *)
+      dns_block="fake_ip = ${fake_ip_val}
+hijack = false"
+      [[ -n "$dns_upstream" ]] && dns_block+=$'\n'"$dns_upstream"
+      dns_block+=$'\n'"systemd_resolved = false"
+      ;;
   esac
 
   # Baseline excludes keep LAN/link-local/multicast off the tunnel, then the
@@ -747,12 +784,13 @@ zeptun_write_conf() {
   done
 
   cat > "$ZEPTUN_CONF" <<EOF
-preset = "desktop"
+preset = "$preset"
 log_level = "info"
 stats_interval_s = 0
 
 [tun]
 name = "$ZEPTUN_TUN"
+mtu = $mtu
 $address
 
 [handler]
@@ -1013,6 +1051,22 @@ cmd_system_route_start() {
     return 1
   fi
 
+  # Configure system DNS when systemd-resolved mode is active
+  if [[ "$SYSROUTE_DNS_MODE" == "systemd_resolved" ]] && command -v resolvectl &>/dev/null; then
+    local -a dns_list=()
+    IFS=', ' read -r -a dns_list <<< "$SYSROUTE_DNS_SERVERS"
+    if [[ ${#dns_list[@]} -gt 0 ]]; then
+      resolvectl dns "$ZEPTUN_TUN" "${dns_list[@]}" 2>/dev/null || true
+    else
+      resolvectl dns "$ZEPTUN_TUN" 1.1.1.1 8.8.8.8 2>/dev/null || true
+    fi
+    resolvectl domain "$ZEPTUN_TUN" "~." 2>/dev/null || true
+    resolvectl default-route "$ZEPTUN_TUN" true 2>/dev/null || true
+    resolvectl flush-caches 2>/dev/null || true
+  elif command -v resolvectl &>/dev/null; then
+    resolvectl flush-caches 2>/dev/null || true
+  fi
+
   # End-to-end: ordinary (unproxied) traffic must now exit via the tunnel.
   local ok=0
   local trace
@@ -1088,6 +1142,10 @@ cmd_system_route_status() {
   "sysroute_enabled": $( [[ "$SYSROUTE_ENABLED" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_ipv6": $( [[ "$SYSROUTE_IPV6" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
+  "sysroute_dns_servers": $(json_str "$SYSROUTE_DNS_SERVERS"),
+  "sysroute_fake_ip": $( [[ "$SYSROUTE_FAKE_IP" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_preset": $(json_str "$SYSROUTE_PRESET"),
+  "sysroute_mtu": $(json_num "$SYSROUTE_MTU" 1500),
   "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
   "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE")
@@ -1483,6 +1541,10 @@ cmd_status() {
   "sysroute_enabled": $( [[ "$SYSROUTE_ENABLED" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_ipv6": $( [[ "$SYSROUTE_IPV6" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
+  "sysroute_dns_servers": $(json_str "$SYSROUTE_DNS_SERVERS"),
+  "sysroute_fake_ip": $( [[ "$SYSROUTE_FAKE_IP" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_preset": $(json_str "$SYSROUTE_PRESET"),
+  "sysroute_mtu": $(json_num "$SYSROUTE_MTU" 1500),
   "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
   "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE"),
@@ -1979,6 +2041,18 @@ cmd_set_config() {
         systemd_resolved|hijack|off) SYSROUTE_DNS_MODE="$val" ;;
         *) echo "Error: sysroute_dns_mode must be systemd_resolved, hijack, or off." >&2; return 1 ;;
       esac ;;
+    sysroute_dns_servers) SYSROUTE_DNS_SERVERS="$val" ;;
+    sysroute_fake_ip)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_fake_ip must be 0 or 1." >&2; return 1; }
+      SYSROUTE_FAKE_IP="$val" ;;
+    sysroute_preset)
+      case "$val" in
+        desktop|mobile|server) SYSROUTE_PRESET="$val" ;;
+        *) echo "Error: sysroute_preset must be desktop, mobile, or server." >&2; return 1 ;;
+      esac ;;
+    sysroute_mtu)
+      [[ "$val" =~ ^[0-9]+$ ]] && (( val >= 576 && val <= 65535 )) || { echo "Error: sysroute_mtu must be between 576 and 65535." >&2; return 1; }
+      SYSROUTE_MTU="$val" ;;
     sysroute_udp_mode)
       case "$val" in
         udp|tcp) SYSROUTE_UDP_MODE="$val" ;;
