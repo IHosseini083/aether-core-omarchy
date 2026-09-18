@@ -69,6 +69,24 @@ omarchy plugin enable cluvex.aether
 
 The plugin appears in the bar's right section. Move it with `omarchy bar move cluvex.aether --section <left|center|right>` if you like.
 
+## Update
+
+Update the plugin with:
+
+```sh
+omarchy plugin update cluvex.aether
+```
+
+(Omit the id to update every installed git-managed plugin at once.) Manual alternative:
+
+```sh
+git -C ~/.config/omarchy/plugins/cluvex.aether pull
+```
+
+If the bar widget doesn't pick up the change immediately, restart the Omarchy shell (or log out and back in).
+
+**Aether core updates:** the core version is pinned by the plugin and verified against committed SHA-256 checksums, so a plugin update does not silently swap your core. When a plugin update bumps the pinned core version, refresh it in two steps: remove the managed core in the Settings tab (**Remove** next to `~/.local/share/omarchy-aether/bin/aether`), then use **Download & Install Aether Core**. The new plugin version installs its pinned release.
+
 ## Core
 
 The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core 2.0.0**.
@@ -158,7 +176,7 @@ Before removing: disconnect the tunnel first if you want a clean teardown (remov
 ## Security notes
 
 - Plugins run unsandboxed inside the Omarchy shell with your user permissions. This plugin only shells out to its own `bin/aether-ctl`, `curl`, `tar`, `jq`, and `systemctl`, and never requests root.
-- Release downloads are fetched over HTTPS from GitHub but are **not** checksum-verified; verify the archive yourself if that matters to you.
+- Release downloads are pinned to a fixed core version, fetched over HTTPS from GitHub, and verified against SHA-256 checksums committed in `bin/aether-ctl` before anything is extracted; see [Core](#core) and [DOCS.md](DOCS.md).
 - The local SOCKS5 proxy has no authentication and binds to `127.0.0.1` only. Do not expose the port to your network.
 
 ## License
