@@ -14,7 +14,7 @@ Item {
   property bool connecting: false
   property bool crossed: false
   property bool warning: false
-
+  property bool routed: false
   width: iconSize
   height: iconSize
   implicitWidth: iconSize
@@ -81,6 +81,18 @@ Item {
     color: root.color
     opacity: 0.85
     rotation: -45
+  }
+
+  // System-routing indicator: small dot, bottom-left
+  BorderSurface {
+    visible: root.routed
+    width: Math.max(8, parent.width * 0.4)
+    height: width
+    radius: width / 2
+    color: root.accentColor
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    borderSpec: Border.flat(Color.popups.background, 1)
   }
 
   // Warning badge

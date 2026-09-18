@@ -14,7 +14,7 @@ Panel {
   ipcTarget: "cluvex.aether"
   manageIpc: false
 
-  property string currentTab: "controls" // "controls" | "settings" | "advanced" | "logs"
+  property string currentTab: "controls" // "controls" | "settings" | "routing" | "advanced" | "logs"
   property string pendingRemovePath: ""
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
@@ -25,6 +25,7 @@ Panel {
 
   readonly property color barGlyphColor: {
     if (!aether.installed || aether.lastError !== "") return urgent
+    if (aether.zeptun_state === "RUNNING" && aether.connected) return accent
     if (aether.connected) return accent
     if (aether.running) return foreground
     return dim
@@ -52,6 +53,10 @@ Panel {
     function start(): string { aether.startAether(); return "ok" }
     function stop(): string { aether.stopAether(); return "ok" }
     function restart(): string { aether.restartAether(); return "ok" }
+    function systemRouteStatus(): string { return aether.zeptunStatusSummary }
+    function systemRouteStart(): string { aether.systemRouteStart(); return "ok" }
+    function systemRouteStop(): string { aether.systemRouteStop(); return "ok" }
+    function systemRouteRestart(): string { aether.systemRouteRestart(); return "ok" }
     function tab(t: string): string { root.currentTab = t; return "ok" }
     function status(): string { return aether.statusSummary }
   }
@@ -61,7 +66,7 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     iconComponent: Component {
-      Item {
+        Item {
         AetherIcon {
           anchors.centerIn: parent
           iconSize: Style.space(16)
@@ -72,6 +77,7 @@ Panel {
           connecting: aether.running && !aether.connected
           crossed: !aether.running
           warning: !aether.installed || aether.lastError !== ""
+          routed: aether.zeptun_state === "RUNNING"
         }
       }
     }
@@ -102,7 +108,7 @@ Panel {
     // +12: breathing room below the last row. fittedContentHeight adds the
     // card's padding/border insets on top; the column's 12px top margin is
     // separate, so total visible margin is 12 top / 12 bottom.
-    contentHeight: panel.fittedContentHeight(mainColumn.implicitHeight + Style.space(12), Style.space(currentTab === "controls" || currentTab === "logs" ? 760 : 660))
+    contentHeight: panel.fittedContentHeight(mainColumn.implicitHeight + Style.space(12), Style.space(currentTab === "controls" || currentTab === "logs" || currentTab === "routing" ? 760 : 660))
 
     onOpenChanged: {
       if (open) {
@@ -153,6 +159,7 @@ Panel {
                 connecting: aether.running && !aether.connected
                 crossed: !aether.running
                 warning: !aether.installed || aether.lastError !== ""
+                routed: aether.zeptun_state === "RUNNING"
               }
             }
             trailingControl: Component {
@@ -181,6 +188,13 @@ Panel {
               text: "Cores"
               selected: root.currentTab === "settings"
               onClicked: root.currentTab = "settings"
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Routing"
+              selected: root.currentTab === "routing"
+              onClicked: root.currentTab = "routing"
             }
 
             Button {
@@ -251,6 +265,7 @@ Panel {
             width: parent.width
             sourceComponent: root.currentTab === "controls" ? tabControlsComp
               : root.currentTab === "settings" ? tabSettingsComp
+              : root.currentTab === "routing" ? tabRoutingComp
               : root.currentTab === "advanced" ? tabAdvancedComp
               : tabLogsComp
           }
@@ -765,7 +780,228 @@ Panel {
   }
 
   // -------------------------------------------------------------
-  // TAB 3: ADVANCED — every remaining Aether CLI feature
+  // TAB 3: ROUTING — optional Zeptun system-wide TUN routing
+  // -------------------------------------------------------------
+  Component {
+    id: tabRoutingComp
+
+    Column {
+      width: parent.width
+      spacing: Style.space(12)
+
+      // Missing engine alert card
+      BorderSurface {
+        visible: !aether.zeptun_available
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.12)
+        borderSpec: Border.flat(root.urgent, 1)
+        implicitHeight: missingZeptunCol.implicitHeight + Style.space(20)
+
+        Column {
+          id: missingZeptunCol
+          width: parent.width - Style.space(24)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          Text {
+            width: parent.width
+            text: "Zeptun Engine Not Found"
+            color: root.urgent
+            font.bold: true
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.subtitle
+          }
+
+          Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: "System-wide routing needs the Zeptun TUN engine (github.com/Noisemux/zeptun). Download the pinned, checksum-verified release into the plugin's data directory, or point the binary path below at an existing installation."
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Button {
+            text: aether.actionInProgress ? "Downloading…" : "Download & Install Zeptun"
+            accent: root.accent
+            bordered: true
+            enabled: !aether.actionInProgress
+            onClicked: aether.runAction(["zeptun-install"], "Downloading Zeptun…")
+          }
+        }
+      }
+
+      // Status card
+      BorderSurface {
+        visible: aether.zeptun_available
+        width: parent.width
+        radius: Style.cornerRadius
+        implicitHeight: routingCol.implicitHeight + Style.space(16)
+        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
+
+        Column {
+          id: routingCol
+          width: parent.width - Style.space(24)
+          anchors.centerIn: parent
+          spacing: Style.space(6)
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(8)
+
+            Text {
+              Layout.fillWidth: true
+              text: Model.zeptunStateLabel(aether.zeptun_state, aether.zeptun_error, aether.zeptun_available)
+              font.bold: true
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              color: Model.zeptunStateColor(aether.zeptun_state, root.accent, root.urgent, root.foreground, root.dim)
+              wrapMode: Text.Wrap
+            }
+
+            ToggleSwitch {
+              checked: aether.sysroute_enabled
+              busy: aether.actionInProgress
+              onToggled: aether.setSysrouteEnabled(!aether.sysroute_enabled)
+            }
+          }
+
+          Text {
+            width: parent.width
+            visible: aether.zeptun_state === "RUNNING"
+            text: "tun " + aether.zeptun_tun + " · pid " + aether.zeptun_pid + " · up " + aether.zeptun_uptime_s + "s"
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.dim
+            elide: Text.ElideMiddle
+          }
+
+          Text {
+            width: parent.width
+            visible: aether.zeptun_available && !aether.zeptun_has_cap_net_admin
+            wrapMode: Text.Wrap
+            text: "Zeptun needs CAP_NET_ADMIN (TUN + routing). Grant it once:\nsudo setcap cap_net_admin+ep " + (aether.zeptun_binary !== "" ? aether.zeptun_binary : "~/.local/share/omarchy-aether/bin/zeptun")
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.urgent
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Button {
+              Layout.fillWidth: true
+              text: "Start"
+              enabled: aether.sysroute_enabled && aether.connected && aether.zeptun_state !== "RUNNING" && aether.zeptun_state !== "STARTING" && !aether.actionInProgress
+              onClicked: aether.systemRouteStart()
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Stop"
+              enabled: (aether.zeptun_state === "RUNNING" || aether.zeptun_state === "STARTING") && !aether.actionInProgress
+              onClicked: aether.systemRouteStop()
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Restart"
+              enabled: aether.zeptun_state === "RUNNING" && !aether.actionInProgress
+              onClicked: aether.systemRouteRestart()
+            }
+          }
+        }
+      }
+
+      // Engine settings
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "ROUTING SETTINGS"
+        foreground: root.foreground
+      }
+
+      RowLayout {
+        visible: aether.zeptun_available
+        width: parent.width
+        spacing: Style.space(6)
+
+        Button {
+          Layout.fillWidth: true
+          text: "IPv4"
+          selected: !aether.sysroute_ipv6
+          onClicked: aether.setConfig("sysroute_ipv6", "0")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "IPv4 + IPv6"
+          selected: aether.sysroute_ipv6
+          onClicked: aether.setConfig("sysroute_ipv6", "1")
+        }
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_dns_mode"
+        label: "DNS MODE"
+        value: aether.sysroute_dns_mode
+        options: [
+          { value: "systemd_resolved", label: "Hand over to systemd-resolved" },
+          { value: "hijack", label: "Hijack all DNS into the tunnel" },
+          { value: "off", label: "Off — DNS follows normal routing" }
+        ]
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_udp_mode"
+        label: "UDP CARRIER"
+        value: aether.sysroute_udp_mode
+        options: [
+          { value: "udp", label: "Native UDP (SOCKS5 UDP ASSOCIATE)" },
+          { value: "tcp", label: "UDP over TCP" }
+        ]
+      }
+
+      Toggle {
+        visible: aether.zeptun_available
+        width: parent.width
+        label: "Persistent"
+        description: "Bring system routing up automatically whenever Aether is connected (survives reboot and Aether restarts, with bounded retries)"
+        checked: aether.sysroute_persistent
+        onClicked: aether.setConfig("sysroute_persistent", aether.sysroute_persistent ? "0" : "1")
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_exclude"
+        labelText: "Route exclusions (CIDRs, comma or space separated)"
+        hintText: "Kept off the tunnel in addition to LAN, link-local, multicast, and Aether's own endpoints."
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "zeptun_bin"
+        labelText: "Zeptun binary path (empty = auto-discover)"
+        hintText: "Discovery order: this path, ~/.local/share/omarchy-aether/bin/, ~/.local/bin, /usr/local/bin, then $PATH."
+      }
+
+      Text {
+        visible: aether.zeptun_available
+        width: parent.width
+        wrapMode: Text.Wrap
+        text: "Starting system routing turns on the core's firewall mark (SO_MARK 0xff) so Aether's own connection bypasses the TUN — the mark is inert in normal mode. IPv4-only mode blocks IPv6 through the routing policy instead of leaking it."
+        font.pixelSize: Style.font.caption
+        color: root.dim
+        font.family: root.fontFamily
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // TAB 4: ADVANCED — every remaining Aether CLI feature
   // -------------------------------------------------------------
   Component {
     id: tabAdvancedComp
@@ -954,7 +1190,7 @@ Panel {
   }
 
   // -------------------------------------------------------------
-  // TAB 4: LIVE LOGS — auto-tailing & color-coded viewer
+  // TAB 5: LIVE LOGS — auto-tailing & color-coded viewer
   // -------------------------------------------------------------
   Component {
     id: tabLogsComp
@@ -966,11 +1202,20 @@ Panel {
       RowLayout {
         width: parent.width
 
-        PanelSectionHeader {
-          text: "AETHER DAEMON LOGS"
-          foreground: root.foreground
-          Layout.fillWidth: true
+        Button {
+          text: "Aether"
+          selected: aether.logsView === "aether"
+          onClicked: aether.setLogsView("aether")
         }
+
+        Button {
+          text: "Zeptun"
+          selected: aether.logsView === "zeptun"
+          enabled: aether.zeptun_available
+          onClicked: aether.setLogsView("zeptun")
+        }
+
+        Item { Layout.fillWidth: true }
 
         Button {
           text: aether.fetchingLogs ? "…" : "Refresh"
@@ -999,7 +1244,9 @@ Panel {
 
       Text {
         width: parent.width
-        text: "Log file: ~/.local/share/omarchy-aether/aether.log"
+        text: aether.logsView === "zeptun"
+          ? "Log file: ~/.local/share/omarchy-aether/zeptun.log"
+          : "Log file: ~/.local/share/omarchy-aether/aether.log"
         color: root.dim
         font.pixelSize: Style.font.caption
         elide: Text.ElideMiddle
@@ -1050,7 +1297,10 @@ Panel {
             font.family: "monospace"
             font.pixelSize: Style.font.caption
 
-            text: aether.logsHtml !== "" ? aether.logsHtml : "<span style='color:#666;'>(No recent log entries)</span>"
+            text: {
+              var html = aether.logsView === "zeptun" ? aether.zeptunLogsHtml : aether.logsHtml
+              return html !== "" ? html : "<span style='color:#666;'>(No recent log entries)</span>"
+            }
 
             onTextChanged: {
               if (aether.autoTailLogs && root.currentTab === "logs")

@@ -77,9 +77,29 @@ Item {
   property string access_token: ""
   property string access_email: ""
 
+  // Zeptun system-wide routing (optional TUN engine)
+  property string zeptun_state: "DISABLED"
+  property bool zeptun_available: false
+  property string zeptun_binary: ""
+  property string zeptun_pid: ""
+  property string zeptun_tun: "zeptun0"
+  property bool zeptun_has_cap_net_admin: false
+  property int zeptun_retries: 0
+  property int zeptun_uptime_s: 0
+  property string zeptun_error: ""
+  property bool sysroute_enabled: false
+  property bool sysroute_ipv6: false
+  property string sysroute_dns_mode: "systemd_resolved"
+  property string sysroute_udp_mode: "udp"
+  property bool sysroute_persistent: false
+  property string sysroute_exclude: ""
+
   // Logs & Operations
   property string logsText: ""
   property string logsHtml: ""
+  property string zeptunLogsText: ""
+  property string zeptunLogsHtml: ""
+  property string logsView: "aether" // "aether" | "zeptun"
   property bool autoTailLogs: true
   property bool refreshing: false
   property bool fetchingLogs: false
@@ -92,6 +112,7 @@ Item {
   readonly property string ctlPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl"
   readonly property string heroPhrase: Model.getHeroPhrase(phraseIndex)
   readonly property string statusSummary: !installed ? "Aether core not found" : (!running ? "Disconnected" : (connected ? "Connected · " + Model.formatColo(colo, loc) : "Connecting to WARP…"))
+  readonly property string zeptunStatusSummary: Model.zeptunStateLabel(zeptun_state, zeptun_error, zeptun_available)
 
   function refresh() {
     if (statusProcess.running) return
@@ -102,11 +123,25 @@ Item {
   }
 
   function fetchLogs() {
+    if (logsView === "zeptun") {
+      if (zeptunLogsProcess.running) return
+      fetchingLogs = true
+      _zeptunLogsOutput = ""
+      zeptunLogsProcess.command = [ctlPath, "zeptun-logs", "100"]
+      zeptunLogsProcess.running = true
+      return
+    }
     if (logsProcess.running) return
     fetchingLogs = true
     _logsOutput = ""
     logsProcess.command = [ctlPath, "logs", "100"]
     logsProcess.running = true
+  }
+
+  function setLogsView(view) {
+    if (logsView === view) return
+    logsView = view
+    fetchLogs()
   }
 
   function toggleAether() {
@@ -123,6 +158,23 @@ Item {
 
   function restartAether() {
     runAction(["restart"], "Restarting tunnel…")
+  }
+
+  // All system-route actions reuse runAction (async Process, bounded ctl).
+  function systemRouteStart() {
+    runAction(["system-route", "start"], "Starting system routing…")
+  }
+
+  function systemRouteStop() {
+    runAction(["system-route", "stop"], "Stopping system routing…")
+  }
+
+  function systemRouteRestart() {
+    runAction(["system-route", "restart"], "Restarting system routing…")
+  }
+
+  function setSysrouteEnabled(enabled) {
+    setConfig("sysroute_enabled", enabled ? "1" : "0")
   }
 
   function installAether() {
@@ -153,9 +205,15 @@ Item {
   }
 
   function clearLogs() {
-    runAction(["clear-logs"], "Clearing logs…")
-    logsText = ""
-    logsHtml = Model.colorizeLogsToHtml("", Color.accent, Color.urgent)
+    if (logsView === "zeptun") {
+      runAction(["zeptun-clear-logs"], "Clearing zeptun logs…")
+      zeptunLogsText = ""
+      zeptunLogsHtml = Model.colorizeLogsToHtml("", Color.accent, Color.urgent)
+    } else {
+      runAction(["clear-logs"], "Clearing logs…")
+      logsText = ""
+      logsHtml = Model.colorizeLogsToHtml("", Color.accent, Color.urgent)
+    }
   }
 
   function clearCache() {
@@ -203,11 +261,12 @@ Item {
   }
 
   function copyAllLogs() {
-    copyToClipboard(logsText, "Aether logs")
+    copyToClipboard(logsView === "zeptun" ? zeptunLogsText : logsText, logsView === "zeptun" ? "Zeptun logs" : "Aether logs")
   }
 
   property string _statusOutput: ""
   property string _logsOutput: ""
+  property string _zeptunLogsOutput: ""
   property string _actionOutput: ""
   property string _installOutput: ""
 
@@ -286,6 +345,21 @@ Item {
         root.access_secret = data.access_secret
         root.access_token = data.access_token
         root.access_email = data.access_email
+        root.zeptun_state = data.zeptun_state
+        root.zeptun_available = data.zeptun_available
+        root.zeptun_binary = data.zeptun_binary
+        root.zeptun_pid = data.zeptun_pid
+        root.zeptun_tun = data.zeptun_tun
+        root.zeptun_has_cap_net_admin = data.zeptun_has_cap_net_admin
+        root.zeptun_retries = data.zeptun_retries
+        root.zeptun_uptime_s = data.zeptun_uptime_s
+        root.zeptun_error = data.zeptun_error
+        root.sysroute_enabled = data.sysroute_enabled
+        root.sysroute_ipv6 = data.sysroute_ipv6
+        root.sysroute_dns_mode = data.sysroute_dns_mode
+        root.sysroute_udp_mode = data.sysroute_udp_mode
+        root.sysroute_persistent = data.sysroute_persistent
+        root.sysroute_exclude = data.sysroute_exclude
       }
     }
   }
@@ -302,6 +376,22 @@ Item {
       if (code === 0) {
         root.logsText = Model.cleanLogLines(root._logsOutput.trim())
         root.logsHtml = Model.colorizeLogsToHtml(root._logsOutput.trim(), Color.accent, Color.urgent)
+      }
+    }
+  }
+
+  Process {
+    id: zeptunLogsProcess
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._zeptunLogsOutput += line + "\n"
+      }
+    }
+    onExited: function(code) {
+      root.fetchingLogs = false
+      if (code === 0) {
+        root.zeptunLogsText = Model.cleanLogLines(root._zeptunLogsOutput.trim())
+        root.zeptunLogsHtml = Model.colorizeLogsToHtml(root._zeptunLogsOutput.trim(), Color.accent, Color.urgent)
       }
     }
   }

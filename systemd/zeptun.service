@@ -1,0 +1,15 @@
+[Unit]
+Description=Aether system-wide routing (Zeptun TUN engine)
+# Rides on the tunnel: Zeptun dials through Aether's local SOCKS5 endpoint.
+After=aether.service
+BindsTo=aether.service
+PartOf=aether.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl system-route start
+ExecStop=%h/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl system-route stop
+
+[Install]
+WantedBy=default.target

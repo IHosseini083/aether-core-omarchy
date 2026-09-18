@@ -1037,6 +1037,13 @@ cmd_zeptun_logs() {
   fi
 }
 
+cmd_zeptun_clear_logs() {
+  if [[ -f "$ZEPTUN_LOG_FILE" ]]; then
+    truncate -s 0 "$ZEPTUN_LOG_FILE"
+  fi
+  echo "Zeptun logs cleared."
+}
+
 
 build_args() {
   local bin="$1"
@@ -1528,8 +1535,7 @@ cmd_toggle() {
 }
 
 # Run in the foreground (no setsid/disown) for systemd Type=simple
-cmd_foreground() {
-  local bin
+cmd_foreground() {  local bin
   bin=$(detect_aether_bin) || {
     echo "Aether core not found. Download core or specify custom binary path." >&2
     return 1
@@ -1668,9 +1674,10 @@ cmd_install() {
   fi
   rm -f "$tmp_file"
 
-  rm -rf "$BIN_DIR"
+  rm -rf "$BIN_DIR/pt"
   mkdir -p "$BIN_DIR"
-  mv "$staging/aether" "$staging/pt" "$BIN_DIR"/
+  mv "$staging/aether" "$BIN_DIR"/aether
+  mv "$staging/pt" "$BIN_DIR"/pt
   rmdir "$staging"
 
   CUSTOM_BIN="$BIN_DIR/aether"
@@ -1681,6 +1688,119 @@ cmd_install() {
   if is_running; then
     echo "Restarting tunnel with the new core…"
     cmd_restart
+  fi
+}
+
+# The engine is executed, so its release is pinned and checksum-verified the
+# same way as the core. To upgrade: bump ZEPTUN_VERSION and replace the
+# hashes below with the values from the release's SHA256SUMS asset.
+ZEPTUN_VERSION="v1.0.0"
+ZEPTUN_MAX_BYTES=$((8 * 1024 * 1024))
+
+zeptun_expected_sha256() {
+  case "$1" in
+    zeptun-linux-x86_64) echo "4c05802082c346a35a63d61c6d587e8d8187705c672989b5b9c1815ffdc6178d" ;;
+    zeptun-linux-arm64)  echo "c3a611393d92e1f03023b5ecfe2b6c798b6c7ca24177ee362d153d89fab3a308" ;;
+    zeptun-linux-armv7)  echo "709572e4bf9d015845a26f372fb285d711ee6d95869089297be0c320b80ae9ea" ;;
+    zeptun-linux-i686)   echo "b7fd045de5d7cb3300f6e829a7f0d55961c4a070facc55fa00ef6d425a3e24c8" ;;
+    *) return 1 ;;
+  esac
+}
+
+cmd_zeptun_install() {
+  local arch
+  arch=$(uname -m)
+  local release_file=""
+
+  case "$arch" in
+    x86_64)          release_file="zeptun-linux-x86_64" ;;
+    aarch64|arm64)   release_file="zeptun-linux-arm64" ;;
+    armv7l)          release_file="zeptun-linux-armv7" ;;
+    i686)            release_file="zeptun-linux-i686" ;;
+    *)
+      echo "Unsupported architecture: $arch" >&2
+      return 1
+      ;;
+  esac
+
+  local expected_sha
+  if ! expected_sha=$(zeptun_expected_sha256 "$release_file"); then
+    echo "Error: no pinned checksum for $release_file." >&2
+    return 1
+  fi
+
+  mkdir -p "$BIN_DIR"
+  local url="https://github.com/Noisemux/zeptun/releases/download/${ZEPTUN_VERSION}/${release_file}"
+  local tmp_file
+  tmp_file=$(mktemp /tmp/zeptun-download.XXXXXX)
+
+  echo "Downloading Zeptun ${ZEPTUN_VERSION} ($arch) from $url..."
+
+  local dl_ok=0
+  if curl -fsSL --connect-timeout 5 -m 45 --max-filesize "$ZEPTUN_MAX_BYTES" "$url" -o "$tmp_file"; then
+    dl_ok=1
+  elif is_running && curl -fsSL --connect-timeout 5 -m 45 --max-filesize "$ZEPTUN_MAX_BYTES" -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
+    echo "Downloaded via proxy fallback."
+    dl_ok=1
+  fi
+
+  if [[ "$dl_ok" -ne 1 ]]; then
+    rm -f "$tmp_file"
+    echo "Download failed or exceeded the ${ZEPTUN_MAX_BYTES}-byte cap. Check your internet connection." >&2
+    return 1
+  fi
+
+  local actual_sha
+  if ! actual_sha=$(sha256sum "$tmp_file" | awk '{print $1}') || [[ "$actual_sha" != "$expected_sha" ]]; then
+    rm -f "$tmp_file"
+    echo "Checksum mismatch for ${release_file}: expected ${expected_sha}, got ${actual_sha:-none}. Aborting." >&2
+    return 1
+  fi
+
+  echo "Checksum OK. Installing..."
+  # Atomic replace: stage under the final name first, then rename over.
+  if ! mv -f "$tmp_file" "$BIN_DIR/zeptun.new"; then
+    rm -f "$tmp_file"
+    return 1
+  fi
+  chmod 0755 "$BIN_DIR/zeptun.new"
+  mv -f "$BIN_DIR/zeptun.new" "$BIN_DIR/zeptun"
+
+  # Drop the discovery cache so the new binary is picked up immediately.
+  rm -f "$RUN_DIR/zeptun.cache" 2>/dev/null || true
+
+  echo "Installed Zeptun ${ZEPTUN_VERSION} to $BIN_DIR/zeptun"
+
+  # Minimum privilege: the engine only needs CAP_NET_ADMIN (TUN device,
+  # netlink routes/rules). Grant it to the managed binary when possible;
+  # otherwise surface the exact command — never run the plugin itself as root.
+  if ! zeptun_has_cap_net_admin "$BIN_DIR/zeptun"; then
+    if command -v setcap &>/dev/null && sudo -n setcap cap_net_admin+ep "$BIN_DIR/zeptun" 2>/dev/null; then
+      echo "Granted CAP_NET_ADMIN to the Zeptun binary."
+    else
+      echo "Zeptun needs CAP_NET_ADMIN to create the TUN device. Grant it once:" >&2
+      echo "  sudo setcap cap_net_admin+ep $BIN_DIR/zeptun" >&2
+    fi
+  fi
+
+  # If the engine is already running, bounce it onto the new binary
+  # (bounded: stop is synchronous, start happens detached).
+  zeptun_state_read
+  if [[ "$SYSROUTE_ENABLED" == "1" && "$Z_STATE" == "RUNNING" ]]; then
+    echo "Restarting system routing with the new engine…"
+    cmd_system_route_stop >/dev/null 2>&1 || true
+    zeptun_spawn_async_start
+  fi
+}
+
+cmd_zeptun_remove() {
+  if [[ -f "$BIN_DIR/zeptun" ]]; then
+    rm -f "$BIN_DIR/zeptun" "$BIN_DIR/zeptun.new"
+    rmdir "$BIN_DIR" 2>/dev/null || true
+    rm -f "$RUN_DIR/zeptun.cache" 2>/dev/null || true
+    echo "Removed the managed Zeptun binary."
+  else
+    echo "No managed Zeptun binary found."
   fi
 }
 
@@ -1895,8 +2015,12 @@ cmd_remove_core() {
   fi
 
   if [[ "$target" == "$BIN_DIR/aether" ]]; then
-    rm -rf "$BIN_DIR"
-    echo "Removed managed core directory $BIN_DIR"
+    # Remove only the core's own files; the managed directory may also hold
+    # the plugin-managed zeptun binary, which stays untouched.
+    rm -f "$BIN_DIR/aether"
+    rm -rf "$BIN_DIR/pt"
+    rmdir "$BIN_DIR" 2>/dev/null || true
+    echo "Removed managed core files from $BIN_DIR"
   else
     rm -f "$target"
     echo "Removed $target"
@@ -1929,12 +2053,16 @@ case "${1:-status}" in
       stop) cmd_system_route_stop ;;
       restart) cmd_system_route_stop; sleep 0.3; cmd_system_route_start ;;
       zeptun-logs) cmd_zeptun_logs "${2:-60}" ;;
+      zeptun-clear-logs) cmd_zeptun_clear_logs ;;
       *) echo "Usage: aether-ctl system-route {status|start|stop|restart|zeptun-logs [N]}"; exit 1 ;;
     esac
     ;;
   zeptun-logs) cmd_zeptun_logs "${2:-60}" ;;
+  zeptun-clear-logs) cmd_zeptun_clear_logs ;;
+  zeptun-install) cmd_zeptun_install ;;
+  zeptun-remove) cmd_zeptun_remove ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove}"
     exit 1
     ;;
 esac

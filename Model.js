@@ -78,7 +78,22 @@ function parseStatus(rawJson) {
     access_secret: "",
     access_token: "",
     access_email: "",
-    discovered_cores: []
+    discovered_cores: [],
+    zeptun_state: "DISABLED",
+    zeptun_available: false,
+    zeptun_binary: "",
+    zeptun_pid: "",
+    zeptun_tun: "zeptun0",
+    zeptun_has_cap_net_admin: false,
+    zeptun_retries: 0,
+    zeptun_uptime_s: 0,
+    zeptun_error: "",
+    sysroute_enabled: false,
+    sysroute_ipv6: false,
+    sysroute_dns_mode: "systemd_resolved",
+    sysroute_udp_mode: "udp",
+    sysroute_persistent: false,
+    sysroute_exclude: ""
   };
 
   if (!rawJson || typeof rawJson !== "string") {
@@ -149,7 +164,22 @@ function parseStatus(rawJson) {
       access_secret: String(parsed.access_secret || ""),
       access_token: String(parsed.access_token || ""),
       access_email: String(parsed.access_email || ""),
-      discovered_cores: Array.isArray(parsed.discovered_cores) ? parsed.discovered_cores : []
+      discovered_cores: Array.isArray(parsed.discovered_cores) ? parsed.discovered_cores : [],
+      zeptun_state: String(parsed.zeptun_state || "DISABLED"),
+      zeptun_available: parsed.zeptun_available === true,
+      zeptun_binary: String(parsed.zeptun_binary || ""),
+      zeptun_pid: String(parsed.zeptun_pid || ""),
+      zeptun_tun: String(parsed.zeptun_tun || "zeptun0"),
+      zeptun_has_cap_net_admin: parsed.zeptun_has_cap_net_admin === true,
+      zeptun_retries: Number(parsed.zeptun_retries) || 0,
+      zeptun_uptime_s: Number(parsed.zeptun_uptime_s) || 0,
+      zeptun_error: String(parsed.zeptun_error || ""),
+      sysroute_enabled: parsed.sysroute_enabled === true,
+      sysroute_ipv6: parsed.sysroute_ipv6 === true,
+      sysroute_dns_mode: String(parsed.sysroute_dns_mode || "systemd_resolved"),
+      sysroute_udp_mode: String(parsed.sysroute_udp_mode || "udp"),
+      sysroute_persistent: parsed.sysroute_persistent === true,
+      sysroute_exclude: String(parsed.sysroute_exclude || "")
     };
   } catch (e) {
     return defaultState;
@@ -185,6 +215,27 @@ function exportEnv(port) {
 function curlSnippet(port) {
   var u = socksUrl(port);
   return "curl -x " + u + " https://www.cloudflare.com/cdn-cgi/trace";
+}
+
+function zeptunStateLabel(state, error, available) {
+  switch (state) {
+    case "RUNNING": return "System routing active";
+    case "STARTING": return "Starting system routing…";
+    case "STOPPING": return "Stopping system routing…";
+    case "FAILED": return "System routing failed" + (error ? " — " + error : "");
+    case "STOPPED": return "System routing stopped";
+    default: return available ? "Zeptun ready (not routing)" : "Zeptun unavailable";
+  }
+}
+
+function zeptunStateColor(state, accent, urgent, foreground, dim) {
+  switch (state) {
+    case "RUNNING": return accent;
+    case "STARTING":
+    case "STOPPING": return foreground;
+    case "FAILED": return urgent;
+    default: return dim;
+  }
 }
 
 function cleanLogLines(rawText) {
