@@ -98,9 +98,19 @@ aether-ctl zeptun-remove              # delete the managed engine binary
 | `sysroute_dns_mode` | `systemd_resolved`, `hijack`, `off` | — (engine `[dns]` section) | ✓ Routing |
 | `sysroute_dns_servers` | `1.1.1.1, 8.8.8.8` | — (in-tunnel DNS servers to prevent ISP poisoning) | ✓ Routing |
 | `sysroute_fake_ip` | `0` (off), `1` (on) | — (remote domain resolution via SOCKS5) | ✓ Routing |
-| `sysroute_udp_mode` | `udp` (native), `tcp` (UDP over TCP) | — (engine `udp_mode`) | ✓ Routing |
-| `sysroute_persistent` | `0`, `1` (auto-start with Aether, bounded retries) | — | ✓ Routing |
+| `sysroute_dns_hijack` | `0`, `1` (default `1`) | — (capture port 53 to in-tunnel DNS) | ✓ Routing |
+| `sysroute_strict_route` | `0`, `1` (default `1`) | — (block uncarried address families / leak protection) | ✓ Routing |
+| `sysroute_auto_redirect` | `0` (default), `1` | — (nftables TCP redirect for lower latency) | ✓ Routing |
 | `sysroute_exclude` | empty | — (extra engine `exclude` CIDRs) | ✓ Routing |
+| `sysroute_exclude_uids` | empty | — (comma-separated UIDs/ranges excluded from tunnel) | ✓ Routing |
+| `sysroute_stack_mode` | `userspace` (default), `hybrid`, `system` | — (Zeptun TCP/IP stack implementation) | ✓ Routing |
+| `sysroute_congestion` | `cubic` (default), `newreno` | — (TCP congestion control algorithm) | ✓ Routing |
+| `sysroute_udp_mode` | `udp` (native), `tcp` (UDP over TCP) | — (engine `udp_mode`) | ✓ Routing |
+| `sysroute_tcp_fastopen` | `0` (default), `1` | — (TCP Fast Open for upstream connections) | ✓ Routing |
+| `sysroute_offload` | `0`, `1` (default `1`) | — (virtio-net, TSO, USO, checksum offload) | ✓ Routing |
+| `sysroute_io_backend` | `auto` (default), `io_uring`, `epoll` | — (async I/O event engine) | ✓ Routing |
+| `sysroute_log_level` | `warn` (default), `info`, `debug`, `err` | — (Zeptun log verbosity) | ✓ Routing |
+| `sysroute_persistent` | `0`, `1` (auto-start with Aether, bounded retries) | — | ✓ Routing |
 | `zeptun_bin` | empty (auto-discover) | — (engine binary selector) | ✓ Routing |
 
 `sysroute_*` and `zeptun_bin` keys never hot-restart the Aether core. Changing one while routing is active bounces only the Zeptun engine.
@@ -135,8 +145,15 @@ All documented upstream flags now have a `set` key (see table above) except the 
   "zeptun_pid": "", "zeptun_tun": "zeptun0", "zeptun_has_cap_net_admin": false,
   "zeptun_retries": 0, "zeptun_uptime_s": 0, "zeptun_error": "",
   "sysroute_enabled": false, "sysroute_ipv6": false,
-  "sysroute_dns_mode": "systemd_resolved", "sysroute_udp_mode": "udp",
-  "sysroute_persistent": false, "sysroute_exclude": ""
+  "sysroute_dns_mode": "systemd_resolved", "sysroute_dns_servers": "1.1.1.1, 8.8.8.8",
+  "sysroute_fake_ip": false, "sysroute_dns_hijack": true,
+  "sysroute_preset": "desktop", "sysroute_mtu": 1500,
+  "sysroute_udp_mode": "udp", "sysroute_persistent": false,
+  "sysroute_exclude": "", "sysroute_exclude_uids": "",
+  "sysroute_strict_route": true, "sysroute_auto_redirect": false,
+  "sysroute_stack_mode": "userspace", "sysroute_congestion": "cubic",
+  "sysroute_tcp_fastopen": false, "sysroute_offload": true,
+  "sysroute_io_backend": "auto", "sysroute_log_level": "warn"
 }
 ```
 

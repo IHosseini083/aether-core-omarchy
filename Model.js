@@ -93,11 +93,21 @@ function parseStatus(rawJson) {
     sysroute_dns_mode: "systemd_resolved",
     sysroute_dns_servers: "1.1.1.1, 8.8.8.8",
     sysroute_fake_ip: false,
+    sysroute_dns_hijack: true,
     sysroute_preset: "desktop",
     sysroute_mtu: 1500,
     sysroute_udp_mode: "udp",
     sysroute_persistent: false,
-    sysroute_exclude: ""
+    sysroute_exclude: "",
+    sysroute_exclude_uids: "",
+    sysroute_strict_route: true,
+    sysroute_auto_redirect: false,
+    sysroute_stack_mode: "userspace",
+    sysroute_congestion: "cubic",
+    sysroute_tcp_fastopen: false,
+    sysroute_offload: true,
+    sysroute_io_backend: "auto",
+    sysroute_log_level: "warn"
   };
 
   if (!rawJson || typeof rawJson !== "string") {
@@ -183,11 +193,21 @@ function parseStatus(rawJson) {
       sysroute_dns_mode: String(parsed.sysroute_dns_mode || "systemd_resolved"),
       sysroute_dns_servers: String(parsed.sysroute_dns_servers || "1.1.1.1, 8.8.8.8"),
       sysroute_fake_ip: parsed.sysroute_fake_ip === true,
+      sysroute_dns_hijack: parsed.sysroute_dns_hijack !== false,
       sysroute_preset: String(parsed.sysroute_preset || "desktop"),
       sysroute_mtu: Number(parsed.sysroute_mtu) || 1500,
       sysroute_udp_mode: String(parsed.sysroute_udp_mode || "udp"),
       sysroute_persistent: parsed.sysroute_persistent === true,
-      sysroute_exclude: String(parsed.sysroute_exclude || "")
+      sysroute_exclude: String(parsed.sysroute_exclude || ""),
+      sysroute_exclude_uids: String(parsed.sysroute_exclude_uids || ""),
+      sysroute_strict_route: parsed.sysroute_strict_route !== false,
+      sysroute_auto_redirect: parsed.sysroute_auto_redirect === true,
+      sysroute_stack_mode: String(parsed.sysroute_stack_mode || "userspace"),
+      sysroute_congestion: String(parsed.sysroute_congestion || "cubic"),
+      sysroute_tcp_fastopen: parsed.sysroute_tcp_fastopen === true,
+      sysroute_offload: parsed.sysroute_offload !== false,
+      sysroute_io_backend: String(parsed.sysroute_io_backend || "auto"),
+      sysroute_log_level: String(parsed.sysroute_log_level || "warn")
     };
   } catch (e) {
     return defaultState;

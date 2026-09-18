@@ -926,31 +926,11 @@ Panel {
         }
       }
 
-      // Engine settings
+      // Presets & MTU
       PanelSectionHeader {
         visible: aether.zeptun_available
-        text: "ROUTING SETTINGS"
+        text: "PRESET & MTU"
         foreground: root.foreground
-      }
-
-      RowLayout {
-        visible: aether.zeptun_available
-        width: parent.width
-        spacing: Style.space(6)
-
-        Button {
-          Layout.fillWidth: true
-          text: "IPv4"
-          selected: !aether.sysroute_ipv6
-          onClicked: aether.setConfig("sysroute_ipv6", "0")
-        }
-
-        Button {
-          Layout.fillWidth: true
-          text: "IPv4 + IPv6"
-          selected: aether.sysroute_ipv6
-          onClicked: aether.setConfig("sysroute_ipv6", "1")
-        }
       }
 
       RowLayout {
@@ -980,6 +960,79 @@ Panel {
         }
       }
 
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_mtu"
+        labelText: "TUN interface MTU"
+        hintText: "Interface MTU. Desktop defaults to 8500 (with offloads); set to 1500, 1420, or 1280 if your link suffers from fragmentation."
+      }
+
+      // Traffic & Routing Rules
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "ROUTING & TRAFFIC SCOPE"
+        foreground: root.foreground
+      }
+
+      RowLayout {
+        visible: aether.zeptun_available
+        width: parent.width
+        spacing: Style.space(6)
+
+        Button {
+          Layout.fillWidth: true
+          text: "IPv4 Only"
+          selected: !aether.sysroute_ipv6
+          onClicked: aether.setConfig("sysroute_ipv6", "0")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "IPv4 + IPv6"
+          selected: aether.sysroute_ipv6
+          onClicked: aether.setConfig("sysroute_ipv6", "1")
+        }
+      }
+
+      Toggle {
+        visible: aether.zeptun_available
+        width: parent.width
+        label: "Strict routing (leak protection)"
+        description: "Block address families the tunnel does not carry (e.g. block IPv6 in IPv4-only mode) instead of leaking them unproxied."
+        checked: aether.sysroute_strict_route
+        onClicked: aether.setConfig("sysroute_strict_route", aether.sysroute_strict_route ? "0" : "1")
+      }
+
+      Toggle {
+        visible: aether.zeptun_available
+        width: parent.width
+        label: "Auto-redirect TCP (nftables)"
+        description: "Redirect TCP traffic into a kernel socket using nftables netlink, bypassing TUN device overhead for maximum throughput."
+        checked: aether.sysroute_auto_redirect
+        onClicked: aether.setConfig("sysroute_auto_redirect", aether.sysroute_auto_redirect ? "0" : "1")
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_exclude"
+        labelText: "Excluded subnets (CIDRs, comma-separated)"
+        hintText: "Kept off the tunnel in addition to LAN, link-local, multicast, and Aether endpoints (e.g. 192.168.1.0/24)."
+      }
+
+      AetherField {
+        visible: aether.zeptun_available
+        key: "sysroute_exclude_uids"
+        labelText: "Excluded UIDs (comma-separated)"
+        hintText: "Keep specific local users or UID ranges off the tunnel (e.g. 1001, 1005-1010)."
+      }
+
+      // DNS Configuration
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "DNS ENGINE"
+        foreground: root.foreground
+      }
+
       AetherDropdown {
         visible: aether.zeptun_available
         key: "sysroute_dns_mode"
@@ -987,8 +1040,8 @@ Panel {
         value: aether.sysroute_dns_mode
         options: [
           { value: "systemd_resolved", label: "Hand over to systemd-resolved (~. default route)" },
-          { value: "hijack", label: "Hijack all DNS into the tunnel" },
-          { value: "off", label: "Off — DNS follows normal routing" }
+          { value: "hijack", label: "Capture all DNS into tunnel resolver" },
+          { value: "off", label: "Off — DNS follows physical routing" }
         ]
       }
 
@@ -996,7 +1049,7 @@ Panel {
         visible: aether.zeptun_available
         key: "sysroute_dns_servers"
         labelText: "In-tunnel DNS servers (comma-separated)"
-        hintText: "DNS servers reached through the tunnel (e.g. 1.1.1.1, 8.8.8.8, 9.9.9.9). Prevents ISP DNS poisoning."
+        hintText: "Upstream DNS reached through the tunnel (e.g. 1.1.1.1, 8.8.8.8, 9.9.9.9). Prevents ISP DNS poisoning."
       }
 
       Toggle {
@@ -1008,11 +1061,43 @@ Panel {
         onClicked: aether.setConfig("sysroute_fake_ip", aether.sysroute_fake_ip ? "0" : "1")
       }
 
-      AetherField {
+      Toggle {
         visible: aether.zeptun_available
-        key: "sysroute_mtu"
-        labelText: "TUN interface MTU"
-        hintText: "Default is 1500. Lower to 1420 or 1280 if your connection suffers from packet fragmentation."
+        width: parent.width
+        label: "DNS hijack"
+        description: "Capture port 53 DNS queries to any destination IP and force them into the in-tunnel resolver."
+        checked: aether.sysroute_dns_hijack
+        onClicked: aether.setConfig("sysroute_dns_hijack", aether.sysroute_dns_hijack ? "0" : "1")
+      }
+
+      // Stack & Transport
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "STACK & TRANSPORT"
+        foreground: root.foreground
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_stack_mode"
+        label: "TCP/IP STACK MODE"
+        value: aether.sysroute_stack_mode
+        options: [
+          { value: "userspace", label: "Userspace — full user-space network stack (default)" },
+          { value: "hybrid", label: "Hybrid — userspace / kernel combined" },
+          { value: "system", label: "System — kernel NAT stack" }
+        ]
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_congestion"
+        label: "TCP CONGESTION CONTROL"
+        value: aether.sysroute_congestion
+        options: [
+          { value: "cubic", label: "Cubic — optimized for high-bandwidth & latency (default)" },
+          { value: "newreno", label: "NewReno — classic Reno congestion control" }
+        ]
       }
 
       AetherDropdown {
@@ -1029,17 +1114,60 @@ Panel {
       Toggle {
         visible: aether.zeptun_available
         width: parent.width
-        label: "Persistent"
-        description: "Bring system routing up automatically whenever Aether is connected (survives reboot and Aether restarts, with bounded retries)"
-        checked: aether.sysroute_persistent
-        onClicked: aether.setConfig("sysroute_persistent", aether.sysroute_persistent ? "0" : "1")
+        label: "TCP Fast Open (upstream)"
+        description: "Enable TCP Fast Open (TFO) on upstream proxy connections to eliminate handshake round-trip latency."
+        checked: aether.sysroute_tcp_fastopen
+        onClicked: aether.setConfig("sysroute_tcp_fastopen", aether.sysroute_tcp_fastopen ? "0" : "1")
       }
 
-      AetherField {
+      Toggle {
         visible: aether.zeptun_available
-        key: "sysroute_exclude"
-        labelText: "Route exclusions (CIDRs, comma or space separated)"
-        hintText: "Kept off the tunnel in addition to LAN, link-local, multicast, and Aether's own endpoints."
+        width: parent.width
+        label: "Hardware offloads"
+        description: "Enable virtio-net header, TSO, USO, and checksum offload on the TUN interface."
+        checked: aether.sysroute_offload
+        onClicked: aether.setConfig("sysroute_offload", aether.sysroute_offload ? "0" : "1")
+      }
+
+      // Engine I/O & Diagnostics
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "ENGINE I/O & LOGGING"
+        foreground: root.foreground
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_io_backend"
+        label: "I/O BACKEND"
+        value: aether.sysroute_io_backend
+        options: [
+          { value: "auto", label: "Auto — io_uring when available, else epoll" },
+          { value: "io_uring", label: "io_uring — modern high-throughput Linux async I/O" },
+          { value: "epoll", label: "epoll — classic Linux event polling" }
+        ]
+      }
+
+      AetherDropdown {
+        visible: aether.zeptun_available
+        key: "sysroute_log_level"
+        label: "ZEPTUN LOG LEVEL"
+        value: aether.sysroute_log_level
+        options: [
+          { value: "warn", label: "Warn — warnings and errors only (default)" },
+          { value: "info", label: "Info — connection events and engine state" },
+          { value: "debug", label: "Debug — verbose internal state tracing" },
+          { value: "err", label: "Error — errors only" }
+        ]
+      }
+
+      Toggle {
+        visible: aether.zeptun_available
+        width: parent.width
+        label: "Persistent auto-start"
+        description: "Bring system routing up automatically whenever Aether is connected (survives reboot and Aether restarts, with bounded retries)."
+        checked: aether.sysroute_persistent
+        onClicked: aether.setConfig("sysroute_persistent", aether.sysroute_persistent ? "0" : "1")
       }
 
       AetherField {

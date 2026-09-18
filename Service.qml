@@ -92,11 +92,21 @@ Item {
   property string sysroute_dns_mode: "systemd_resolved"
   property string sysroute_dns_servers: "1.1.1.1, 8.8.8.8"
   property bool sysroute_fake_ip: false
+  property bool sysroute_dns_hijack: true
   property string sysroute_preset: "desktop"
   property int sysroute_mtu: 1500
   property string sysroute_udp_mode: "udp"
   property bool sysroute_persistent: false
   property string sysroute_exclude: ""
+  property string sysroute_exclude_uids: ""
+  property bool sysroute_strict_route: true
+  property bool sysroute_auto_redirect: false
+  property string sysroute_stack_mode: "userspace"
+  property string sysroute_congestion: "cubic"
+  property bool sysroute_tcp_fastopen: false
+  property bool sysroute_offload: true
+  property string sysroute_io_backend: "auto"
+  property string sysroute_log_level: "warn"
 
   // Logs & Operations
   property string logsText: ""
@@ -371,11 +381,21 @@ Item {
         root.sysroute_dns_mode = data.sysroute_dns_mode
         root.sysroute_dns_servers = data.sysroute_dns_servers
         root.sysroute_fake_ip = data.sysroute_fake_ip
+        root.sysroute_dns_hijack = data.sysroute_dns_hijack
         root.sysroute_preset = data.sysroute_preset
         root.sysroute_mtu = data.sysroute_mtu
         root.sysroute_udp_mode = data.sysroute_udp_mode
         root.sysroute_persistent = data.sysroute_persistent
         root.sysroute_exclude = data.sysroute_exclude
+        root.sysroute_exclude_uids = data.sysroute_exclude_uids
+        root.sysroute_strict_route = data.sysroute_strict_route
+        root.sysroute_auto_redirect = data.sysroute_auto_redirect
+        root.sysroute_stack_mode = data.sysroute_stack_mode
+        root.sysroute_congestion = data.sysroute_congestion
+        root.sysroute_tcp_fastopen = data.sysroute_tcp_fastopen
+        root.sysroute_offload = data.sysroute_offload
+        root.sysroute_io_backend = data.sysroute_io_backend
+        root.sysroute_log_level = data.sysroute_log_level
       }
     }
   }

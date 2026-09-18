@@ -85,11 +85,21 @@ DEFAULT_SYSROUTE_IPV6=0
 DEFAULT_SYSROUTE_DNS_MODE="systemd_resolved"
 DEFAULT_SYSROUTE_DNS_SERVERS="1.1.1.1, 8.8.8.8"
 DEFAULT_SYSROUTE_FAKE_IP=0
+DEFAULT_SYSROUTE_DNS_HIJACK=1
 DEFAULT_SYSROUTE_PRESET="desktop"
 DEFAULT_SYSROUTE_MTU=1500
 DEFAULT_SYSROUTE_UDP_MODE="udp"
 DEFAULT_SYSROUTE_PERSISTENT=0
 DEFAULT_SYSROUTE_EXCLUDE=""
+DEFAULT_SYSROUTE_EXCLUDE_UIDS=""
+DEFAULT_SYSROUTE_STRICT_ROUTE=1
+DEFAULT_SYSROUTE_AUTO_REDIRECT=0
+DEFAULT_SYSROUTE_STACK_MODE="userspace"
+DEFAULT_SYSROUTE_CONGESTION="cubic"
+DEFAULT_SYSROUTE_TCP_FASTOPEN=0
+DEFAULT_SYSROUTE_OFFLOAD=1
+DEFAULT_SYSROUTE_IO_BACKEND="auto"
+DEFAULT_SYSROUTE_LOG_LEVEL="warn"
 DEFAULT_ZEPTUN_BIN=""
 
 load_config() {
@@ -154,11 +164,21 @@ load_config() {
   SYSROUTE_DNS_MODE="${AETHER_CFG_SYSROUTE_DNS_MODE:-$DEFAULT_SYSROUTE_DNS_MODE}"
   SYSROUTE_DNS_SERVERS="${AETHER_CFG_SYSROUTE_DNS_SERVERS:-$DEFAULT_SYSROUTE_DNS_SERVERS}"
   SYSROUTE_FAKE_IP="${AETHER_CFG_SYSROUTE_FAKE_IP:-$DEFAULT_SYSROUTE_FAKE_IP}"
+  SYSROUTE_DNS_HIJACK="${AETHER_CFG_SYSROUTE_DNS_HIJACK:-$DEFAULT_SYSROUTE_DNS_HIJACK}"
   SYSROUTE_PRESET="${AETHER_CFG_SYSROUTE_PRESET:-$DEFAULT_SYSROUTE_PRESET}"
   SYSROUTE_MTU="${AETHER_CFG_SYSROUTE_MTU:-$DEFAULT_SYSROUTE_MTU}"
   SYSROUTE_UDP_MODE="${AETHER_CFG_SYSROUTE_UDP_MODE:-$DEFAULT_SYSROUTE_UDP_MODE}"
   SYSROUTE_PERSISTENT="${AETHER_CFG_SYSROUTE_PERSISTENT:-$DEFAULT_SYSROUTE_PERSISTENT}"
   SYSROUTE_EXCLUDE="${AETHER_CFG_SYSROUTE_EXCLUDE:-$DEFAULT_SYSROUTE_EXCLUDE}"
+  SYSROUTE_EXCLUDE_UIDS="${AETHER_CFG_SYSROUTE_EXCLUDE_UIDS:-$DEFAULT_SYSROUTE_EXCLUDE_UIDS}"
+  SYSROUTE_STRICT_ROUTE="${AETHER_CFG_SYSROUTE_STRICT_ROUTE:-$DEFAULT_SYSROUTE_STRICT_ROUTE}"
+  SYSROUTE_AUTO_REDIRECT="${AETHER_CFG_SYSROUTE_AUTO_REDIRECT:-$DEFAULT_SYSROUTE_AUTO_REDIRECT}"
+  SYSROUTE_STACK_MODE="${AETHER_CFG_SYSROUTE_STACK_MODE:-$DEFAULT_SYSROUTE_STACK_MODE}"
+  SYSROUTE_CONGESTION="${AETHER_CFG_SYSROUTE_CONGESTION:-$DEFAULT_SYSROUTE_CONGESTION}"
+  SYSROUTE_TCP_FASTOPEN="${AETHER_CFG_SYSROUTE_TCP_FASTOPEN:-$DEFAULT_SYSROUTE_TCP_FASTOPEN}"
+  SYSROUTE_OFFLOAD="${AETHER_CFG_SYSROUTE_OFFLOAD:-$DEFAULT_SYSROUTE_OFFLOAD}"
+  SYSROUTE_IO_BACKEND="${AETHER_CFG_SYSROUTE_IO_BACKEND:-$DEFAULT_SYSROUTE_IO_BACKEND}"
+  SYSROUTE_LOG_LEVEL="${AETHER_CFG_SYSROUTE_LOG_LEVEL:-$DEFAULT_SYSROUTE_LOG_LEVEL}"
   ZEPTUN_BIN="${AETHER_CFG_ZEPTUN_BIN:-$DEFAULT_ZEPTUN_BIN}"
 
   # Legacy config files written before %q quoting may carry junk in numeric
@@ -227,11 +247,21 @@ save_config() {
     printf 'AETHER_CFG_SYSROUTE_DNS_MODE=%q\n' "$SYSROUTE_DNS_MODE"
     printf 'AETHER_CFG_SYSROUTE_DNS_SERVERS=%q\n' "$SYSROUTE_DNS_SERVERS"
     printf 'AETHER_CFG_SYSROUTE_FAKE_IP=%q\n' "$SYSROUTE_FAKE_IP"
+    printf 'AETHER_CFG_SYSROUTE_DNS_HIJACK=%q\n' "$SYSROUTE_DNS_HIJACK"
     printf 'AETHER_CFG_SYSROUTE_PRESET=%q\n' "$SYSROUTE_PRESET"
     printf 'AETHER_CFG_SYSROUTE_MTU=%q\n' "$SYSROUTE_MTU"
     printf 'AETHER_CFG_SYSROUTE_UDP_MODE=%q\n' "$SYSROUTE_UDP_MODE"
     printf 'AETHER_CFG_SYSROUTE_PERSISTENT=%q\n' "$SYSROUTE_PERSISTENT"
     printf 'AETHER_CFG_SYSROUTE_EXCLUDE=%q\n' "$SYSROUTE_EXCLUDE"
+    printf 'AETHER_CFG_SYSROUTE_EXCLUDE_UIDS=%q\n' "$SYSROUTE_EXCLUDE_UIDS"
+    printf 'AETHER_CFG_SYSROUTE_STRICT_ROUTE=%q\n' "$SYSROUTE_STRICT_ROUTE"
+    printf 'AETHER_CFG_SYSROUTE_AUTO_REDIRECT=%q\n' "$SYSROUTE_AUTO_REDIRECT"
+    printf 'AETHER_CFG_SYSROUTE_STACK_MODE=%q\n' "$SYSROUTE_STACK_MODE"
+    printf 'AETHER_CFG_SYSROUTE_CONGESTION=%q\n' "$SYSROUTE_CONGESTION"
+    printf 'AETHER_CFG_SYSROUTE_TCP_FASTOPEN=%q\n' "$SYSROUTE_TCP_FASTOPEN"
+    printf 'AETHER_CFG_SYSROUTE_OFFLOAD=%q\n' "$SYSROUTE_OFFLOAD"
+    printf 'AETHER_CFG_SYSROUTE_IO_BACKEND=%q\n' "$SYSROUTE_IO_BACKEND"
+    printf 'AETHER_CFG_SYSROUTE_LOG_LEVEL=%q\n' "$SYSROUTE_LOG_LEVEL"
     printf 'AETHER_CFG_ZEPTUN_BIN=%q\n' "$ZEPTUN_BIN"
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE" 2>/dev/null || true
@@ -733,20 +763,34 @@ zeptun_write_conf() {
   local fake_ip_val="false"
   [[ "$SYSROUTE_FAKE_IP" == "1" ]] && fake_ip_val="true"
 
+  local hijack_val="false"
+  [[ "$SYSROUTE_DNS_HIJACK" == "1" || "$dns_mode" == "hijack" ]] && hijack_val="true"
+
+  local strict_val="false"
+  [[ "$SYSROUTE_STRICT_ROUTE" == "1" ]] && strict_val="true"
+
+  local auto_redirect_val="false"
+  [[ "$SYSROUTE_AUTO_REDIRECT" == "1" ]] && auto_redirect_val="true"
+
+  local tcp_fastopen_val="false"
+  [[ "$SYSROUTE_TCP_FASTOPEN" == "1" ]] && tcp_fastopen_val="true"
+
+  local offload_val="true"
+  [[ "$SYSROUTE_OFFLOAD" == "0" ]] && offload_val="false"
+
+  local stack_mode="${SYSROUTE_STACK_MODE:-userspace}"
+  local congestion="${SYSROUTE_CONGESTION:-cubic}"
+  local io_backend="${SYSROUTE_IO_BACKEND:-auto}"
+  local log_level="${SYSROUTE_LOG_LEVEL:-warn}"
+
   local dns_block
   case "$dns_mode" in
-    hijack)
-      dns_block="fake_ip = ${fake_ip_val}
-hijack = true"
-      [[ -n "$dns_upstream" ]] && dns_block+=$'\n'"$dns_upstream"
-      dns_block+=$'\n'"systemd_resolved = false"
-      ;;
     off)
       dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = false'
       ;;
     *)
       dns_block="fake_ip = ${fake_ip_val}
-hijack = false"
+hijack = ${hijack_val}"
       [[ -n "$dns_upstream" ]] && dns_block+=$'\n'"$dns_upstream"
       dns_block+=$'\n'"systemd_resolved = false"
       ;;
@@ -783,18 +827,44 @@ hijack = false"
     exclude_lines+="\"$entry\""
   done
 
+  local uid_block=""
+  if [[ -n "$SYSROUTE_EXCLUDE_UIDS" ]]; then
+    local -a uids=()
+    IFS=', ' read -r -a raw_uids <<< "$SYSROUTE_EXCLUDE_UIDS"
+    for entry in "${raw_uids[@]}"; do
+      [[ -n "$entry" ]] || continue
+      if [[ "$entry" =~ ^[0-9]+(-[0-9]+)?$ ]]; then
+        uids+=("\"$entry\"")
+      else
+        zeptun_log "ignored malformed UID exclusion: $entry"
+      fi
+    done
+    if (( ${#uids[@]} > 0 )); then
+      local uid_joined
+      uid_joined=$(IFS=', '; echo "${uids[*]}")
+      uid_block="exclude_uid = [$uid_joined]"
+    fi
+  fi
+
   cat > "$ZEPTUN_CONF" <<EOF
 preset = "$preset"
-log_level = "info"
+log_level = "$log_level"
 stats_interval_s = 0
 
 [tun]
 name = "$ZEPTUN_TUN"
 mtu = $mtu
+offload = $offload_val
 $address
+
+[stack]
+mode = "$stack_mode"
+congestion = "$congestion"
+udp = true
 
 [handler]
 kind = "socks5"
+tcp_fastopen = $tcp_fastopen_val
 
 [handler.socks5]
 server = "$socks_server"
@@ -804,10 +874,13 @@ udp_mode = "$udp_mode"
 auto_route = true
 table = $ZEPTUN_TABLE
 fwmark = $ZEPTUN_FWMARK
-strict = true
+strict = $strict_val
+auto_redirect = $auto_redirect_val
 exclude = [$exclude_lines]
+$uid_block
 
 [io]
+backend = "$io_backend"
 monitor_network = true
 
 [dns]
@@ -1144,11 +1217,21 @@ cmd_system_route_status() {
   "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
   "sysroute_dns_servers": $(json_str "$SYSROUTE_DNS_SERVERS"),
   "sysroute_fake_ip": $( [[ "$SYSROUTE_FAKE_IP" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_dns_hijack": $( [[ "$SYSROUTE_DNS_HIJACK" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_preset": $(json_str "$SYSROUTE_PRESET"),
   "sysroute_mtu": $(json_num "$SYSROUTE_MTU" 1500),
   "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
   "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
-  "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE")
+  "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE"),
+  "sysroute_exclude_uids": $(json_str "$SYSROUTE_EXCLUDE_UIDS"),
+  "sysroute_strict_route": $( [[ "$SYSROUTE_STRICT_ROUTE" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_auto_redirect": $( [[ "$SYSROUTE_AUTO_REDIRECT" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_stack_mode": $(json_str "$SYSROUTE_STACK_MODE"),
+  "sysroute_congestion": $(json_str "$SYSROUTE_CONGESTION"),
+  "sysroute_tcp_fastopen": $( [[ "$SYSROUTE_TCP_FASTOPEN" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_offload": $( [[ "$SYSROUTE_OFFLOAD" != "0" ]] && echo "true" || echo "false" ),
+  "sysroute_io_backend": $(json_str "$SYSROUTE_IO_BACKEND"),
+  "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL")
 }
 EOF
 }
@@ -1543,11 +1626,21 @@ cmd_status() {
   "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
   "sysroute_dns_servers": $(json_str "$SYSROUTE_DNS_SERVERS"),
   "sysroute_fake_ip": $( [[ "$SYSROUTE_FAKE_IP" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_dns_hijack": $( [[ "$SYSROUTE_DNS_HIJACK" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_preset": $(json_str "$SYSROUTE_PRESET"),
   "sysroute_mtu": $(json_num "$SYSROUTE_MTU" 1500),
   "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
   "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE"),
+  "sysroute_exclude_uids": $(json_str "$SYSROUTE_EXCLUDE_UIDS"),
+  "sysroute_strict_route": $( [[ "$SYSROUTE_STRICT_ROUTE" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_auto_redirect": $( [[ "$SYSROUTE_AUTO_REDIRECT" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_stack_mode": $(json_str "$SYSROUTE_STACK_MODE"),
+  "sysroute_congestion": $(json_str "$SYSROUTE_CONGESTION"),
+  "sysroute_tcp_fastopen": $( [[ "$SYSROUTE_TCP_FASTOPEN" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_offload": $( [[ "$SYSROUTE_OFFLOAD" != "0" ]] && echo "true" || echo "false" ),
+  "sysroute_io_backend": $(json_str "$SYSROUTE_IO_BACKEND"),
+  "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL"),
   "discovered_cores": $cores_json
 }
 EOF
@@ -2045,6 +2138,9 @@ cmd_set_config() {
     sysroute_fake_ip)
       [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_fake_ip must be 0 or 1." >&2; return 1; }
       SYSROUTE_FAKE_IP="$val" ;;
+    sysroute_dns_hijack)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_dns_hijack must be 0 or 1." >&2; return 1; }
+      SYSROUTE_DNS_HIJACK="$val" ;;
     sysroute_preset)
       case "$val" in
         desktop|mobile|server) SYSROUTE_PRESET="$val" ;;
@@ -2062,6 +2158,39 @@ cmd_set_config() {
       [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_persistent must be 0 or 1." >&2; return 1; }
       SYSROUTE_PERSISTENT="$val" ;;
     sysroute_exclude) SYSROUTE_EXCLUDE="$val" ;;
+    sysroute_exclude_uids) SYSROUTE_EXCLUDE_UIDS="$val" ;;
+    sysroute_strict_route)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_strict_route must be 0 or 1." >&2; return 1; }
+      SYSROUTE_STRICT_ROUTE="$val" ;;
+    sysroute_auto_redirect)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_auto_redirect must be 0 or 1." >&2; return 1; }
+      SYSROUTE_AUTO_REDIRECT="$val" ;;
+    sysroute_stack_mode)
+      case "$val" in
+        userspace|hybrid|system) SYSROUTE_STACK_MODE="$val" ;;
+        *) echo "Error: sysroute_stack_mode must be userspace, hybrid, or system." >&2; return 1 ;;
+      esac ;;
+    sysroute_congestion)
+      case "$val" in
+        cubic|newreno) SYSROUTE_CONGESTION="$val" ;;
+        *) echo "Error: sysroute_congestion must be cubic or newreno." >&2; return 1 ;;
+      esac ;;
+    sysroute_tcp_fastopen)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_tcp_fastopen must be 0 or 1." >&2; return 1; }
+      SYSROUTE_TCP_FASTOPEN="$val" ;;
+    sysroute_offload)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_offload must be 0 or 1." >&2; return 1; }
+      SYSROUTE_OFFLOAD="$val" ;;
+    sysroute_io_backend)
+      case "$val" in
+        auto|io_uring|epoll) SYSROUTE_IO_BACKEND="$val" ;;
+        *) echo "Error: sysroute_io_backend must be auto, io_uring, or epoll." >&2; return 1 ;;
+      esac ;;
+    sysroute_log_level)
+      case "$val" in
+        err|warn|info|debug) SYSROUTE_LOG_LEVEL="$val" ;;
+        *) echo "Error: sysroute_log_level must be err, warn, info, or debug." >&2; return 1 ;;
+      esac ;;
     zeptun_bin)
       if [[ -n "$val" ]] && ! is_zeptun_bin "$val"; then
         echo "Error: '$val' is not a valid zeptun binary." >&2
