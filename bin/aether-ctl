@@ -16,6 +16,17 @@ CONFIG_FILE="$CONFIG_DIR/config.env"
 PID_FILE="$CONFIG_DIR/aether.pid"
 LOG_FILE="$DATA_DIR/aether.log"
 
+# Zeptun (optional system-wide TUN routing engine)
+ZEPTUN_PID_FILE="$CONFIG_DIR/zeptun.pid"
+ZEPTUN_LOG_FILE="$DATA_DIR/zeptun.log"
+ZEPTUN_STATE_FILE="$RUN_DIR/zeptun.state"
+ZEPTUN_CONF="$RUN_DIR/zeptun.toml"
+ZEPTUN_TUN="zeptun0"
+# Fixed table/fwmark pair reserved by this integration; cleanup removes ONLY
+# policy rules pointing at this table and ONLY the $ZEPTUN_TUN interface.
+ZEPTUN_TABLE=8891
+ZEPTUN_FWMARK=255
+
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$RUN_DIR" "$BIN_DIR"
 
 DEFAULT_CUSTOM_BIN=""
@@ -68,6 +79,14 @@ DEFAULT_TOR_COUNTRY=""
 DEFAULT_ACCESS_ID=""
 DEFAULT_ACCESS_SECRET=""
 DEFAULT_ACCESS_EMAIL=""
+
+DEFAULT_SYSROUTE_ENABLED=0
+DEFAULT_SYSROUTE_IPV6=0
+DEFAULT_SYSROUTE_DNS_MODE="systemd_resolved"
+DEFAULT_SYSROUTE_UDP_MODE="udp"
+DEFAULT_SYSROUTE_PERSISTENT=0
+DEFAULT_SYSROUTE_EXCLUDE=""
+DEFAULT_ZEPTUN_BIN=""
 
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -125,6 +144,14 @@ load_config() {
   ACCESS_ID="${AETHER_CFG_ACCESS_ID:-$DEFAULT_ACCESS_ID}"
   ACCESS_SECRET="${AETHER_CFG_ACCESS_SECRET:-$DEFAULT_ACCESS_SECRET}"
   ACCESS_EMAIL="${AETHER_CFG_ACCESS_EMAIL:-$DEFAULT_ACCESS_EMAIL}"
+
+  SYSROUTE_ENABLED="${AETHER_CFG_SYSROUTE_ENABLED:-$DEFAULT_SYSROUTE_ENABLED}"
+  SYSROUTE_IPV6="${AETHER_CFG_SYSROUTE_IPV6:-$DEFAULT_SYSROUTE_IPV6}"
+  SYSROUTE_DNS_MODE="${AETHER_CFG_SYSROUTE_DNS_MODE:-$DEFAULT_SYSROUTE_DNS_MODE}"
+  SYSROUTE_UDP_MODE="${AETHER_CFG_SYSROUTE_UDP_MODE:-$DEFAULT_SYSROUTE_UDP_MODE}"
+  SYSROUTE_PERSISTENT="${AETHER_CFG_SYSROUTE_PERSISTENT:-$DEFAULT_SYSROUTE_PERSISTENT}"
+  SYSROUTE_EXCLUDE="${AETHER_CFG_SYSROUTE_EXCLUDE:-$DEFAULT_SYSROUTE_EXCLUDE}"
+  ZEPTUN_BIN="${AETHER_CFG_ZEPTUN_BIN:-$DEFAULT_ZEPTUN_BIN}"
 
   # Legacy config files written before %q quoting may carry junk in numeric
   # fields; normalize so downstream arithmetic and JSON stay valid.
@@ -187,12 +214,19 @@ save_config() {
     printf 'AETHER_CFG_ACCESS_ID=%q\n' "$ACCESS_ID"
     printf 'AETHER_CFG_ACCESS_SECRET=%q\n' "$ACCESS_SECRET"
     printf 'AETHER_CFG_ACCESS_EMAIL=%q\n' "$ACCESS_EMAIL"
+    printf 'AETHER_CFG_SYSROUTE_ENABLED=%q\n' "$SYSROUTE_ENABLED"
+    printf 'AETHER_CFG_SYSROUTE_IPV6=%q\n' "$SYSROUTE_IPV6"
+    printf 'AETHER_CFG_SYSROUTE_DNS_MODE=%q\n' "$SYSROUTE_DNS_MODE"
+    printf 'AETHER_CFG_SYSROUTE_UDP_MODE=%q\n' "$SYSROUTE_UDP_MODE"
+    printf 'AETHER_CFG_SYSROUTE_PERSISTENT=%q\n' "$SYSROUTE_PERSISTENT"
+    printf 'AETHER_CFG_SYSROUTE_EXCLUDE=%q\n' "$SYSROUTE_EXCLUDE"
+    printf 'AETHER_CFG_ZEPTUN_BIN=%q\n' "$ZEPTUN_BIN"
   } > "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE" 2>/dev/null || true
 
   # Discovery results may be stale after a config change (custom binary,
   # protocol-dependent probing); drop the cache so the next status re-scans.
-  rm -f "$RUN_DIR/cores.cache" 2>/dev/null || true
+  rm -f "$RUN_DIR/cores.cache" "$RUN_DIR/zeptun.cache" 2>/dev/null || true
 }
 
 load_config
@@ -400,6 +434,609 @@ probe_trace() {
   echo "$trace"
   echo "latency_ms=$elapsed_ms"
 }
+
+# ---------------------------------------------------------------------------
+# Zeptun — optional system-wide TUN routing engine
+#
+# Chain: system traffic -> zeptun TUN -> zeptun SOCKS5 client ->
+#        Aether local SOCKS5 -> Aether tunnel.
+#
+# Everything here is bounded: every external probe has a timeout, the start
+# sequence has a deadline, and teardown removes only the resources this
+# integration created (tun "zeptun0", policy rules for table 8891). Never
+# flushes routes/rules/firewalls globally.
+# ---------------------------------------------------------------------------
+
+zeptun_log() {
+  echo "[$(date -Iseconds)] [zeptun] $*" >> "$ZEPTUN_LOG_FILE"
+}
+
+# State file: state=, pid=, ts=, retries=, error=
+zeptun_state_write() {
+  local state="$1" pid="${2:-}" retries="${3:-0}" error="${4:-}"
+  {
+    printf 'state=%s\n' "$state"
+    printf 'pid=%s\n' "$pid"
+    printf 'ts=%s\n' "$(date +%s)"
+    printf 'retries=%s\n' "$retries"
+    printf 'error=%s\n' "$error"
+  } > "$ZEPTUN_STATE_FILE"
+}
+
+zeptun_state_read() {
+  Z_STATE="DISABLED" Z_PID="" Z_TS=0 Z_RETRIES=0 Z_ERR=""
+  [[ -f "$ZEPTUN_STATE_FILE" ]] || return 0
+  local line key val
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    val="${line#*=}"
+    case "$key" in
+      state) Z_STATE="$val" ;;
+      pid) Z_PID="$val" ;;
+      ts) [[ "$val" =~ ^[0-9]+$ ]] && Z_TS="$val" ;;
+      retries) [[ "$val" =~ ^[0-9]+$ ]] && Z_RETRIES="$val" ;;
+      error) Z_ERR="$val" ;;
+    esac
+  done < "$ZEPTUN_STATE_FILE"
+}
+
+is_zeptun_bin() {
+  local candidate="$1"
+  [[ -n "$candidate" && -x "$candidate" ]] || return 1
+  # `zeptun help` (and --help) list the flags; both mention the ones we rely on.
+  if timeout 3 "$candidate" help 2>&1 | grep -qiE "auto-route|socks5"; then
+    return 0
+  fi
+  if timeout 3 "$candidate" --help 2>&1 | grep -qiE "auto-route|socks5"; then
+    return 0
+  fi
+  return 1
+}
+
+zeptun_discover_bin() {
+  local candidates=(
+    "$ZEPTUN_BIN"
+    "$BIN_DIR/zeptun"
+    "$HOME/.local/bin/zeptun"
+    "/usr/local/bin/zeptun"
+  )
+  local seen=""
+  local cand
+  for cand in "${candidates[@]}"; do
+    [[ -n "$cand" ]] || continue
+    [[ " $seen " != *" $cand "* ]] || continue
+    seen="$seen $cand"
+    if is_zeptun_bin "$cand"; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  while IFS= read -r cand; do
+    [[ -n "$cand" ]] || continue
+    [[ " $seen " != *" $cand "* ]] || continue
+    seen="$seen $cand"
+    if is_zeptun_bin "$cand"; then
+      echo "$cand"
+      return 0
+    fi
+  done < <(which -a zeptun 2>/dev/null || true)
+  return 1
+}
+
+# Discovery probes every candidate with a bounded `help` run; the 4 s status
+# poll must not repeat that (a system without zeptun would stall up to 12 s).
+# Cache both outcomes — including "not found" (empty file) — for 60 s.
+zeptun_discover_bin_cached() {
+  local cache="$RUN_DIR/zeptun.cache"
+  if [[ -f "$cache" ]]; then
+    local mtime now
+    mtime=$(stat -c%Y "$cache" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if (( now - mtime < 60 )); then
+      local cached
+      cached=$(cat "$cache" 2>/dev/null || true)
+      if [[ -z "$cached" ]]; then
+        return 1
+      fi
+      if [[ -x "$cached" ]]; then
+        echo "$cached"
+        return 0
+      fi
+    fi
+  fi
+  local result
+  if ! result=$(zeptun_discover_bin); then
+    printf '' > "$cache"
+    return 1
+  fi
+  printf '%s' "$result" > "$cache"
+  printf '%s' "$result"
+}
+
+zeptun_has_cap_net_admin() {
+  local binary="$1"
+  [[ -x "$binary" ]] || return 1
+  if command -v getcap &>/dev/null; then
+    local caps
+    caps=$(getcap "$binary" 2>/dev/null || true)
+    [[ "$caps" == *"cap_net_admin"* ]] && return 0
+  fi
+  [[ "$(id -u)" -eq 0 ]] && return 0
+  return 1
+}
+
+# True when $1 is a live process whose cmdline matches the recorded zeptun
+# binary (PID-reuse guard, same pattern as is_aether_pid).
+is_zeptun_pid() {
+  local pid="$1" rec_bin="${2:-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  [[ -r "/proc/$pid/cmdline" ]] || return 1
+  local cmdline
+  cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+  if [[ -n "$rec_bin" ]]; then
+    [[ "$cmdline" == *"$rec_bin"* ]] && return 0
+  fi
+  [[ "$cmdline" == *"zeptun"* && "$cmdline" == *"--auto-route"* ]]
+}
+
+zeptun_get_pid() {
+  if [[ -f "$ZEPTUN_PID_FILE" ]]; then
+    local pid rec_bin
+    pid=$(head -n1 "$ZEPTUN_PID_FILE" 2>/dev/null || true)
+    rec_bin=$(sed -n '2p' "$ZEPTUN_PID_FILE" 2>/dev/null || true)
+    if is_zeptun_pid "$pid" "$rec_bin"; then
+      echo "$pid"
+      return 0
+    fi
+  fi
+  # Fallback: a zeptun engine bound to OUR tun name (reserved for the plugin).
+  local pids
+  pids=$(pgrep -f "zeptun.*(${ZEPTUN_TUN}|--auto-route)" 2>/dev/null || true)
+  local p
+  while IFS= read -r p; do
+    if is_zeptun_pid "$p"; then
+      echo "$p"
+      return 0
+    fi
+  done <<< "$pids"
+  return 1
+}
+
+# Remove only resources created by this integration: policy rules pointing at
+# the reserved table and the reserved tun interface. No global flushes ever.
+zeptun_cleanup_network() {
+  if command -v ip &>/dev/null; then
+    while ip rule del lookup "$ZEPTUN_TABLE" 2>/dev/null; do
+      zeptun_log "removed stale policy rule for table $ZEPTUN_TABLE"
+    done
+    if ip link show "$ZEPTUN_TUN" &>/dev/null; then
+      ip link del "$ZEPTUN_TUN" 2>/dev/null || true
+      zeptun_log "removed stale interface $ZEPTUN_TUN"
+    fi
+  fi
+}
+
+# Terminate our zeptun process with escalating signals, all bounded.
+zeptun_kill_pid() {
+  local pid="$1"
+  kill -INT "$pid" 2>/dev/null || true
+  for _ in {1..40}; do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in {1..20}; do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  return 0
+}
+
+zeptun_teardown() {
+  local pid
+  pid=$(zeptun_get_pid || true)
+  if [[ -n "$pid" ]]; then
+    zeptun_kill_pid "$pid"
+  fi
+  rm -f "$ZEPTUN_PID_FILE"
+  zeptun_cleanup_network
+}
+
+# Aether's own upstream sockets must never re-enter the TUN (routing loop).
+# Primary defense: the firewall mark — zeptun's policy rules exclude marked
+# packets, and the core is (re)started with --mark 0xff by this integration.
+# Defense in depth: exclude the core's currently established remote IPs.
+zeptun_loop_guards() {
+  local excludes=()
+  local aether_pid line ip
+  aether_pid=$(get_running_pid || true)
+  if [[ -n "$aether_pid" ]] && command -v ss &>/dev/null; then
+    # ss -tnp: State Recv-Q Send-Q Local Peer ... -> peer is column 5.
+    while IFS= read -r line; do
+      ip=$(printf '%s' "$line" | awk '{print $5}' | sed 's/:[0-9]*$//; s/^\[//; s/\]$//')
+      [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || continue
+      case "$ip" in
+        127.*|0.0.0.0|::1|::) continue ;;
+      esac
+      [[ " ${excludes[*]:-} " == *" $ip "* ]] || excludes+=("$ip")
+    done < <(timeout 2 ss -tnp state established 2>/dev/null | grep -F "pid=$aether_pid" || true)
+  fi
+  printf '%s\n' "${excludes[@]:-}"
+}
+
+zeptun_write_conf() {
+  local socks_server="127.0.0.1:${SOCKS_PORT}"
+  local address v6="${SYSROUTE_IPV6}" dns_mode="${SYSROUTE_DNS_MODE}" udp_mode="${SYSROUTE_UDP_MODE}"
+
+  if [[ "$v6" == "1" ]]; then
+    address='address = ["172.19.0.1/30", "fdfe:dcba:9876::1/126"]'
+  else
+    address='address = ["172.19.0.1/30"]'
+  fi
+
+  local dns_block
+  case "$dns_mode" in
+    hijack)           dns_block=$'fake_ip = false\nhijack = true\nsystemd_resolved = false' ;;
+    off)              dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = false' ;;
+    *)                dns_block=$'fake_ip = false\nhijack = false\nsystemd_resolved = true' ;;
+  esac
+
+  # Baseline excludes keep LAN/link-local/multicast off the tunnel, then the
+  # user's list, then the core's live endpoint IPs (loop guard).
+  local -a excludes=(
+    "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "127.0.0.0/8"
+    "169.254.0.0/16" "224.0.0.0/4" "255.255.255.255/32"
+    "fc00::/7" "fe80::/10" "ff00::/8" "::1/128"
+  )
+  local entry
+  if [[ -n "$SYSROUTE_EXCLUDE" ]]; then
+    IFS=', ' read -r -a user_excludes <<< "$SYSROUTE_EXCLUDE"
+    for entry in "${user_excludes[@]}"; do
+      [[ -n "$entry" ]] || continue
+      # Accept bare CIDRs / IPs only; anything else is refused, not passed on.
+      if [[ "$entry" =~ ^[0-9a-fA-F:.]+(/[0-9]+)?$ ]]; then
+        [[ " ${excludes[*]} " == *" $entry "* ]] || excludes+=("$entry")
+      else
+        zeptun_log "ignored malformed exclusion: $entry"
+      fi
+    done
+  fi
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    [[ " ${excludes[*]} " == *" $entry "* ]] || excludes+=("$entry")
+  done < <(zeptun_loop_guards)
+
+  local exclude_lines=""
+  for entry in "${excludes[@]}"; do
+    [[ -n "$exclude_lines" ]] && exclude_lines+=", "
+    exclude_lines+="\"$entry\""
+  done
+
+  cat > "$ZEPTUN_CONF" <<EOF
+preset = "desktop"
+log_level = "info"
+stats_interval_s = 0
+
+[tun]
+name = "$ZEPTUN_TUN"
+$address
+
+[handler]
+kind = "socks5"
+
+[handler.socks5]
+server = "$socks_server"
+udp_mode = "$udp_mode"
+
+[route]
+auto_route = true
+table = $ZEPTUN_TABLE
+fwmark = $ZEPTUN_FWMARK
+strict = true
+exclude = [$exclude_lines]
+
+[io]
+monitor_network = true
+
+[dns]
+$dns_block
+EOF
+  chmod 600 "$ZEPTON_CONF" 2>/dev/null || true
+}
+
+rotate_zeptun_logs_if_needed() {
+  if [[ -f "$ZEPTUN_LOG_FILE" ]]; then
+    local size
+    size=$(stat -c%s "$ZEPTUN_LOG_FILE" 2>/dev/null || echo 0)
+    if (( size > 2097152 )); then
+      mv "$ZEPTUN_LOG_FILE" "${ZEPTUN_LOG_FILE}.old"
+    fi
+  fi
+}
+
+# Asynchronously spawn a start attempt (used by the persistent/watchdog paths
+# so cmd_status never blocks on the full start sequence).
+zeptun_spawn_async_start() {
+  local log="$DATA_DIR/zeptun-spawn.log"
+  setsid "$0" system-route start >> "$log" 2>&1 < /dev/null &
+  disown 2>/dev/null || true
+}
+
+# Bounded retries with backoff: 2s, 4s, 8s, then stay FAILED.
+zeptun_backoff_secs() {
+  local retries="$1"
+  case "$retries" in
+    0) echo 2 ;;
+    1) echo 4 ;;
+    *) echo 8 ;;
+  esac
+}
+
+# Watchdog: runs on every status poll. Bounded work only — anything heavy is
+# delegated to a detached start attempt.
+zeptun_watchdog() {
+  zeptun_state_read
+
+  # Master switch off → engine must not run.
+  if [[ "$SYSROUTE_ENABLED" != "1" && "$Z_STATE" != "DISABLED" && "$Z_STATE" != "FAILED" ]]; then
+    zeptun_teardown
+    zeptun_state_write "DISABLED"
+    return 0
+  fi
+  if [[ "$SYSROUTE_ENABLED" != "1" ]]; then
+    return 0
+  fi
+
+  local now
+  now=$(date +%s)
+
+  case "$Z_STATE" in
+    RUNNING)
+      local pid
+      pid=$(zeptun_get_pid || true)
+      if [[ -z "$pid" ]]; then
+        zeptun_log "engine died (recorded pid ${Z_PID:-unknown}); cleaning up"
+        zeptun_cleanup_network
+        rm -f "$ZEPTUN_PID_FILE"
+        local retries=$(( Z_RETRIES + 1 ))
+        if (( retries <= 3 )); then
+          zeptun_state_write "STOPPED" "" "$retries" "engine crashed; retry $retries/3"
+        else
+          zeptun_state_write "FAILED" "" "$retries" "engine crashed; retry limit reached"
+        fi
+      fi
+      ;;
+    STARTING)
+      if (( now - Z_TS > 45 )); then
+        zeptun_log "startup exceeded 45s; tearing down"
+        zeptun_teardown
+        zeptun_state_write "FAILED" "" "$Z_RETRIES" "startup timed out"
+      fi
+      ;;
+    STOPPING)
+      if (( now - Z_TS > 15 )); then
+        zeptun_log "stop exceeded 15s; forcing teardown"
+        zeptun_teardown
+        zeptun_state_write "STOPPED" "" "$Z_RETRIES" ""
+      fi
+      ;;
+    STOPPED)
+      # Persistent mode: bring routing up whenever Aether is connected.
+      if [[ "$SYSROUTE_PERSISTENT" == "1" && "$(is_running && echo true || echo false)" == "true" ]]; then
+        zeptun_spawn_async_start
+      fi
+      ;;
+    FAILED)
+      # Bounded self-heal in persistent mode (crash limit, network blips,
+      # suspend/resume, aether restarts). Still capped at 3 retries; a
+      # successful start resets the counter.
+      if [[ "$SYSROUTE_PERSISTENT" == "1" && "$Z_RETRIES" -lt 3 ]]; then
+        local backoff
+        backoff=$(zeptun_backoff_secs "$Z_RETRIES")
+        if (( now - Z_TS >= backoff )); then
+          zeptun_spawn_async_start
+        fi
+      fi
+      ;;
+  esac
+}
+
+cmd_system_route_start() {
+  zeptun_state_read
+  if [[ "$Z_STATE" == "STARTING" || "$Z_STATE" == "RUNNING" ]]; then
+    echo "System routing already ${Z_STATE}."
+    return 0
+  fi
+
+  if [[ "$SYSROUTE_ENABLED" != "1" ]]; then
+    echo "System routing is disabled. Enable it first." >&2
+    return 1
+  fi
+
+  local zbin
+  zbin=$(zeptun_discover_bin) || {
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "zeptun binary not found"
+    echo "Zeptun binary not found. Install it (see README) or set zeptun_bin." >&2
+    return 1
+  }
+  if ! zeptun_has_cap_net_admin "$zbin"; then
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "missing CAP_NET_ADMIN"
+    echo "Zeptun lacks CAP_NET_ADMIN (needed to create the TUN device). Grant it with: sudo setcap cap_net_admin+ep $zbin" >&2
+    return 1
+  fi
+
+  if ! is_running; then
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether not running"
+    echo "Aether is not running. Start the tunnel first." >&2
+    return 1
+  fi
+
+  # Loop prevention requires the core to mark its sockets so zeptun's policy
+  # rules keep them out of the TUN. Enable the mark and restart the core if
+  # it was launched without it; the mark is inert in normal (non-TUN) mode.
+  if [[ "$MARK" != "1" && "$MARK" != "0xff" ]]; then
+    zeptun_log "enabling firewall mark on the core for loop prevention"
+    echo "Enabling the core's firewall mark (SO_MARK 0xff) for loop prevention…"
+    MARK="1"
+    save_config
+    if is_running; then
+      cmd_restart
+    fi
+  fi
+
+  # Aether must actually pass traffic through its SOCKS5 endpoint before we
+  # dare redirect the system into it.
+  local ready=0 i
+  for i in 1 2 3; do
+    if probe_trace "$SOCKS_PORT" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  if (( ready != 1 )); then
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether SOCKS5 not ready"
+    echo "Aether SOCKS5 endpoint is not passing traffic. Start/connect the tunnel first." >&2
+    return 1
+  fi
+
+  rotate_zeptun_logs_if_needed
+  zeptun_write_conf
+
+  zeptun_state_write "STARTING"
+  zeptun_log "launching $zbin -c $ZEPTUN_CONF"
+
+  cd "$RUN_DIR"
+  setsid "$zbin" run -c "$ZEPTUN_CONF" </dev/null >>"$ZEPTUN_LOG_FILE" 2>&1 &
+  local pid=$!
+  printf '%s\n%s\n' "$pid" "$zbin" > "$ZEPTUN_PID_FILE"
+  disown "$pid" 2>/dev/null || true
+
+  # Bounded startup: interface must appear and stay alive within 5s.
+  local up=0
+  for i in {1..20}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      up=0
+      break
+    fi
+    if ip link show "$ZEPTUN_TUN" &>/dev/null; then
+      up=1
+      break
+    fi
+    sleep 0.25
+  done
+  if (( up != 1 )); then
+    local err
+    err=$(tail -n 6 "$ZEPTUN_LOG_FILE" 2>/dev/null | grep -iE "error|denied|failed|cannot" | head -n1 || true)
+    [[ -z "$err" ]] && err=$(tail -n 2 "$ZEPTUN_LOG_FILE" 2>/dev/null | head -n1 || true)
+    zeptun_teardown
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "${err:-tun device did not appear}"
+    echo "Failed to start system routing: ${err:-tun device did not appear}" >&2
+    return 1
+  fi
+
+  # Policy rule for the reserved table must be installed (zeptun auto-route).
+  local rule=0
+  for i in {1..8}; do
+    if ip rule show 2>/dev/null | grep -q "lookup $ZEPTUN_TABLE\|table $ZEPTUN_TABLE"; then
+      rule=1
+      break
+    fi
+    sleep 0.25
+  done
+  if (( rule != 1 )); then
+    zeptun_teardown
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "policy rule for table $ZEPTUN_TABLE missing"
+    echo "Failed to start system routing: routing policy was not installed" >&2
+    return 1
+  fi
+
+  # End-to-end: ordinary (unproxied) traffic must now exit via the tunnel.
+  local ok=0
+  local trace
+  for i in 1 2 3; do
+    trace=$(curl -s --connect-timeout 2 -m 4 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
+    if [[ "$trace" == *"warp=on"* ]]; then
+      ok=1
+      break
+    fi
+    sleep 1
+  done
+  if (( ok != 1 )); then
+    zeptun_teardown
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "end-to-end check failed"
+    echo "System routing did not pass traffic end-to-end; restored previous network state." >&2
+    return 1
+  fi
+
+  zeptun_state_write "RUNNING" "$pid" 0 ""
+  zeptun_log "system routing active (pid $pid, tun $ZEPTUN_TUN, table $ZEPTUN_TABLE)"
+  echo "System routing active (tun $ZEPTUN_TUN)."
+}
+
+cmd_system_route_stop() {
+  zeptun_state_read
+  if [[ "$Z_STATE" != "RUNNING" && "$Z_STATE" != "STARTING" && "$Z_STATE" != "STOPPING" ]]; then
+    # Still sweep in case of stale state.
+    zeptun_teardown
+    zeptun_state_write "STOPPED" "" "$Z_RETRIES" ""
+    echo "System routing is not active."
+    return 0
+  fi
+
+  zeptun_state_write "STOPPING" "$Z_PID" "$Z_RETRIES" ""
+  zeptun_log "stopping engine"
+  zeptun_teardown
+  zeptun_state_write "STOPPED" "" "$Z_RETRIES" ""
+  echo "System routing stopped."
+}
+
+cmd_system_route_status() {
+  zeptun_state_read
+  local zstate="$Z_STATE"
+  [[ "$SYSROUTE_ENABLED" != "1" ]] && { zstate="DISABLED"; Z_ERR=""; }
+  local zbin zpid
+  zbin=$(zeptun_discover_bin_cached || true)
+  zpid=$(zeptun_get_pid || true)
+  [[ "$zstate" != "RUNNING" ]] && zpid=""
+  local cap="false"
+  [[ -n "$zbin" ]] && zeptun_has_cap_net_admin "$zbin" && cap="true"
+  local now uptime=0
+  now=$(date +%s)
+  [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && uptime=$(( now - Z_TS ))
+
+  cat <<EOF
+{
+  "zeptun_state": $(json_str "$zstate"),
+  "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
+  "zeptun_binary": $(json_str "$zbin"),
+  "zeptun_pid": $(json_str "${zpid:-}"),
+  "zeptun_tun": $(json_str "$ZEPTUN_TUN"),
+  "zeptun_has_cap_net_admin": $cap,
+  "zeptun_retries": $(json_num "$Z_RETRIES" 0),
+  "zeptun_uptime_s": $(json_num "$uptime" 0),
+  "zeptun_error": $(json_str "${Z_ERR:-}"),
+  "sysroute_enabled": $( [[ "$SYSROUTE_ENABLED" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_ipv6": $( [[ "$SYSROUTE_IPV6" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
+  "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
+  "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE")
+}
+EOF
+}
+
+cmd_zeptun_logs() {
+  local lines="${1:-60}"
+  rotate_zeptun_logs_if_needed
+  if [[ -f "$ZEPTUN_LOG_FILE" ]]; then
+    tail -n "$lines" "$ZEPTUN_LOG_FILE"
+  else
+    echo "No zeptun log entries yet."
+  fi
+}
+
 
 build_args() {
   local bin="$1"
@@ -624,6 +1261,11 @@ rotate_logs_if_needed() {
 }
 
 cmd_status() {
+  # Zeptun watchdog: crash detection, bounded retries, persistent auto-start.
+  # All bounded work; heavy sequences run detached (see zeptun_watchdog).
+  zeptun_watchdog
+  zeptun_state_read
+
   local bin=""
   bin=$(detect_aether_bin || true)
   local installed="false"
@@ -674,6 +1316,20 @@ cmd_status() {
   if (( ${#core_list[@]} > 0 )); then
     cores_json="[ $(IFS=,; echo "${core_list[*]}") ]"
   fi
+
+  # Zeptun status (bounded: cached discovery, state file reads)
+  local zbin=""
+  zbin=$(zeptun_discover_bin_cached || true)
+  local zcap="false"
+  [[ -n "$zbin" ]] && zeptun_has_cap_net_admin "$zbin" && zcap="true"
+  local zpid
+  zpid=$(zeptun_get_pid || true)
+  local zstate="$Z_STATE"
+  [[ "$SYSROUTE_ENABLED" != "1" ]] && { zstate="DISABLED"; Z_ERR=""; }
+  local znow zuptime=0
+  znow=$(date +%s)
+  [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && zuptime=$(( znow - Z_TS ))
+  [[ "$zstate" != "RUNNING" ]] && zpid=""
 
   cat <<EOF
 {
@@ -737,6 +1393,21 @@ cmd_status() {
   "access_id": $(json_str "$ACCESS_ID"),
   "access_secret": $(json_str "$ACCESS_SECRET"),
   "access_email": $(json_str "$ACCESS_EMAIL"),
+  "zeptun_state": $(json_str "$zstate"),
+  "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
+  "zeptun_binary": $(json_str "$zbin"),
+  "zeptun_pid": $(json_str "${zpid:-}"),
+  "zeptun_tun": $(json_str "$ZEPTUN_TUN"),
+  "zeptun_has_cap_net_admin": $zcap,
+  "zeptun_retries": $(json_num "$Z_RETRIES" 0),
+  "zeptun_uptime_s": $(json_num "$zuptime" 0),
+  "zeptun_error": $(json_str "$Z_ERR"),
+  "sysroute_enabled": $( [[ "$SYSROUTE_ENABLED" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_ipv6": $( [[ "$SYSROUTE_IPV6" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_dns_mode": $(json_str "$SYSROUTE_DNS_MODE"),
+  "sysroute_udp_mode": $(json_str "$SYSROUTE_UDP_MODE"),
+  "sysroute_persistent": $( [[ "$SYSROUTE_PERSISTENT" == "1" ]] && echo "true" || echo "false" ),
+  "sysroute_exclude": $(json_str "$SYSROUTE_EXCLUDE"),
   "discovered_cores": $cores_json
 }
 EOF
@@ -789,6 +1460,14 @@ cmd_start() {
 }
 
 cmd_stop() {
+  # Zeptun rides on the tunnel: bring system routing down BEFORE the core,
+  # so no traffic is ever left pointed at a dead SOCKS endpoint.
+  zeptun_state_read
+  if [[ "$Z_STATE" == "RUNNING" || "$Z_STATE" == "STARTING" || "$Z_STATE" == "STOPPING" ]]; then
+    cmd_system_route_stop >/dev/null 2>&1 || true
+    zeptun_state_write "STOPPED" "" "$Z_RETRIES" ""
+  fi
+
   # When the systemd unit owns the tunnel, stop it through systemd —
   # signaling the process directly would count as a failure and
   # Restart=on-failure would respawn it 3s later.
@@ -1074,6 +1753,43 @@ cmd_set_config() {
     access_id) ACCESS_ID="$val" ;;
     access_secret) ACCESS_SECRET="$val" ;;
     access_email) ACCESS_EMAIL="$val" ;;
+    sysroute_enabled)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_enabled must be 0 or 1." >&2; return 1; }
+      SYSROUTE_ENABLED="$val"
+      if [[ "$val" == "0" ]]; then
+        # Master switch off → engine must come down with it.
+        zeptun_state_read
+        if [[ "$Z_STATE" == "RUNNING" || "$Z_STATE" == "STARTING" || "$Z_STATE" == "STOPPING" ]]; then
+          cmd_system_route_stop >/dev/null 2>&1 || true
+          echo "System routing stopped."
+        fi
+      fi
+      ;;
+    sysroute_ipv6)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_ipv6 must be 0 or 1." >&2; return 1; }
+      SYSROUTE_IPV6="$val" ;;
+    sysroute_dns_mode)
+      case "$val" in
+        systemd_resolved|hijack|off) SYSROUTE_DNS_MODE="$val" ;;
+        *) echo "Error: sysroute_dns_mode must be systemd_resolved, hijack, or off." >&2; return 1 ;;
+      esac ;;
+    sysroute_udp_mode)
+      case "$val" in
+        udp|tcp) SYSROUTE_UDP_MODE="$val" ;;
+        *) echo "Error: sysroute_udp_mode must be udp or tcp." >&2; return 1 ;;
+      esac ;;
+    sysroute_persistent)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: sysroute_persistent must be 0 or 1." >&2; return 1; }
+      SYSROUTE_PERSISTENT="$val" ;;
+    sysroute_exclude) SYSROUTE_EXCLUDE="$val" ;;
+    zeptun_bin)
+      if [[ -n "$val" ]] && ! is_zeptun_bin "$val"; then
+        echo "Error: '$val' is not a valid zeptun binary." >&2
+        return 1
+      fi
+      ZEPTUN_BIN="$val"
+      rm -f "$RUN_DIR/zeptun.cache" 2>/dev/null || true
+      ;;
     *)
       echo "Unknown config key: $key" >&2
       return 1
@@ -1082,11 +1798,41 @@ cmd_set_config() {
 
   save_config
 
-  if is_running; then
-    cmd_restart
-  else
-    echo "Updated $key=$val"
-  fi
+  case "$key" in
+    sysroute_enabled)
+      # Flipping the master switch on: bring routing up right away when the
+      # engine is idle (the detached start verifies Aether readiness itself).
+      if [[ "$val" == "1" ]]; then
+        zeptun_state_read
+        if [[ "$Z_STATE" != "RUNNING" && "$Z_STATE" != "STARTING" ]]; then
+          zeptun_spawn_async_start
+          echo "Updated $key=$val; starting system routing…"
+        else
+          echo "Updated $key=$val"
+        fi
+      else
+        echo "Updated $key=$val"
+      fi
+      ;;
+    sysroute_*|zeptun_bin)
+      # Zeptun-only settings: bounce the engine to apply, core untouched.
+      zeptun_state_read
+      if [[ "$Z_STATE" == "RUNNING" ]]; then
+        cmd_system_route_stop >/dev/null 2>&1 || true
+        zeptun_spawn_async_start
+        echo "Updated $key=$val (system routing restarted)"
+      else
+        echo "Updated $key=$val"
+      fi
+      ;;
+    *)
+      if is_running; then
+        cmd_restart
+      else
+        echo "Updated $key=$val"
+      fi
+      ;;
+  esac
 }
 
 cmd_set_protocol() {
@@ -1175,8 +1921,20 @@ case "${1:-status}" in
   clear-cache) cmd_clear_cache ;;
   remove-core) shift; cmd_remove_core "${1:-}" ;;
   probe) probe_trace "$SOCKS_PORT" ;;
+  system-route)
+    shift
+    case "${1:-status}" in
+      status) cmd_system_route_status ;;
+      start) cmd_system_route_start ;;
+      stop) cmd_system_route_stop ;;
+      restart) cmd_system_route_stop; sleep 0.3; cmd_system_route_start ;;
+      zeptun-logs) cmd_zeptun_logs "${2:-60}" ;;
+      *) echo "Usage: aether-ctl system-route {status|start|stop|restart|zeptun-logs [N]}"; exit 1 ;;
+    esac
+    ;;
+  zeptun-logs) cmd_zeptun_logs "${2:-60}" ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}}"
     exit 1
     ;;
 esac
