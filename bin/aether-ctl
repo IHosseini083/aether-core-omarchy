@@ -870,6 +870,62 @@ cmd_foreground() {
   exec "$bin" "${ARGS[@]}"
 }
 
+# The core is executed, so installs must never pull a moving target: the
+# release is pinned and its archive checksums are committed below. A future
+# or compromised upstream release cannot silently replace the reviewed core.
+# To upgrade: bump AETHER_CORE_VERSION, re-download the new assets, and
+# replace the hashes with the values from the release's *.sha256 sidecars.
+AETHER_CORE_VERSION="v2.0.0"
+# Pinned archives are ~15 MiB; the cap rejects truncated or padded responses.
+AETHER_CORE_MAX_BYTES=$((64 * 1024 * 1024))
+
+core_expected_sha256() {
+  case "$1" in
+    aether-linux-x86_64.tar.gz) echo "504d561222280eea76a7187d5a3df7fd69284c784c02762ef31fd5d9b2904a6d" ;;
+    aether-linux-arm64.tar.gz)  echo "3d37a6e450fd67f85ad1c327c6c9b2bbc2ea4713a73c302c63c9e6936071ec70" ;;
+    aether-linux-armv7.tar.gz)  echo "67a2238342c6541821489a2544c351a68abf4222f1d402eeb84890bf914b965b" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Extract a checksum-verified core archive into dest. Only the three members
+# of the pinned upstream tarball are accepted; anything else (absolute paths,
+# "..", links, unexpected files) aborts before anything is extracted.
+extract_core_archive() {
+  local archive="$1" dest="$2"
+  local expected_members=$'aether\npt/\npt/lyrebird'
+  local members entry line type_char
+
+  if ! members=$(tar -tzf "$archive"); then
+    echo "Error: downloaded file is not a valid tar.gz archive." >&2
+    return 1
+  fi
+
+  if [[ "$members" != "$expected_members" ]]; then
+    echo "Error: archive layout does not match the pinned release (unexpected or extra members)." >&2
+    return 1
+  fi
+
+  for entry in aether pt/ pt/lyrebird; do
+    # First character of `tar -tv` output is the type: '-' regular, 'd' dir,
+    # 'l' symlink, 'h' hardlink.
+    if ! line=$(tar -tvzf "$archive" "$entry"); then
+      echo "Error: expected member '$entry' missing from archive." >&2
+      return 1
+    fi
+    type_char="${line:0:1}"
+    case "$entry" in
+      pt/) [[ "$type_char" == "d" ]] || { echo "Error: '$entry' is not a directory entry." >&2; return 1; } ;;
+      *)   [[ "$type_char" == "-" ]] || { echo "Error: '$entry' is not a regular file (links and devices are rejected)." >&2; return 1; } ;;
+    esac
+  done
+
+  # Every member is now verified, so extracting the archive can no longer
+  # pull in anything outside the pinned member list above.
+  tar -xzf "$archive" -C "$dest" --no-same-owner --no-same-permissions
+  chmod 0755 "$dest/aether" "$dest/pt" "$dest/pt/lyrebird"
+}
+
 cmd_install() {
   local arch
   arch=$(uname -m)
@@ -885,38 +941,63 @@ cmd_install() {
       ;;
   esac
 
+  local expected_sha
+  if ! expected_sha=$(core_expected_sha256 "$release_file"); then
+    echo "Error: no pinned checksum for $release_file." >&2
+    return 1
+  fi
+
   mkdir -p "$BIN_DIR"
-  local url="https://github.com/CluvexStudio/Aether/releases/latest/download/${release_file}"
+  # Immutable release URL: "latest" would let any future release replace the
+  # reviewed core without a new plugin review.
+  local url="https://github.com/CluvexStudio/Aether/releases/download/${AETHER_CORE_VERSION}/${release_file}"
   # mktemp: a predictable /tmp path would let another user pre-create a
   # symlink and make curl clobber a victim-owned file.
   local tmp_file
   tmp_file=$(mktemp /tmp/aether-download.XXXXXX)
 
-  echo "Downloading Aether ($arch) from $url..."
+  echo "Downloading Aether ${AETHER_CORE_VERSION} ($arch) from $url..."
 
   local dl_ok=0
-  if curl -fsSL --connect-timeout 5 -m 45 "$url" -o "$tmp_file"; then
+  if curl -fsSL --connect-timeout 5 -m 45 --max-filesize "$AETHER_CORE_MAX_BYTES" "$url" -o "$tmp_file"; then
     dl_ok=1
-  elif is_running && curl -fsSL --connect-timeout 5 -m 45 -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
+  elif is_running && curl -fsSL --connect-timeout 5 -m 45 --max-filesize "$AETHER_CORE_MAX_BYTES" -x "socks5h://127.0.0.1:${SOCKS_PORT}" "$url" -o "$tmp_file"; then
     echo "Downloaded via proxy fallback."
     dl_ok=1
   fi
 
   if [[ "$dl_ok" -ne 1 ]]; then
     rm -f "$tmp_file"
-    echo "Download failed. Check your internet connection." >&2
+    echo "Download failed or exceeded the ${AETHER_CORE_MAX_BYTES}-byte cap. Check your internet connection." >&2
     return 1
   fi
 
-  echo "Extracting binary..."
-  tar -xzf "$tmp_file" -C "$BIN_DIR"
-  chmod +x "$BIN_DIR/aether"
+  # The archive must match the committed checksum before it is trusted.
+  local actual_sha
+  if ! actual_sha=$(sha256sum "$tmp_file" | awk '{print $1}') || [[ "$actual_sha" != "$expected_sha" ]]; then
+    rm -f "$tmp_file"
+    echo "Checksum mismatch for ${release_file}: expected ${expected_sha}, got ${actual_sha:-none}. Aborting." >&2
+    return 1
+  fi
+
+  echo "Checksum OK. Extracting..."
+  local staging
+  staging=$(mktemp -d /tmp/aether-extract.XXXXXX)
+  if ! extract_core_archive "$tmp_file" "$staging"; then
+    rm -rf "$staging" "$tmp_file"
+    return 1
+  fi
   rm -f "$tmp_file"
+
+  rm -rf "$BIN_DIR"
+  mkdir -p "$BIN_DIR"
+  mv "$staging/aether" "$staging/pt" "$BIN_DIR"/
+  rmdir "$staging"
 
   CUSTOM_BIN="$BIN_DIR/aether"
   save_config
 
-  echo "Installed Aether to $BIN_DIR/aether"
+  echo "Installed Aether ${AETHER_CORE_VERSION} to $BIN_DIR/aether"
 
   if is_running; then
     echo "Restarting tunnel with the new core…"

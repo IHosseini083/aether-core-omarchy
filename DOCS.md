@@ -29,7 +29,7 @@ Data flow: `Panel.qml` instantiates `Service.qml`, which shells out to `bin/aeth
 aether-ctl status                     # JSON status blob (see below)
 aether-ctl start|stop|restart|toggle  # daemon lifecycle
 aether-ctl foreground                 # run in foreground (for systemd)
-aether-ctl install                    # download latest official release
+aether-ctl install                    # download pinned official release (checksum-verified)
 aether-ctl set <key> <val>            # update one setting (hot-restarts)
 aether-ctl set-protocol <proto> <0|1> # atomic protocol + h2 switch
 aether-ctl cores                      # discovered core binaries
@@ -125,7 +125,7 @@ All state lives in two files, both rewritten atomically on every change: `~/.con
 
 ### Core install
 
-`aether-ctl install` maps `uname -m` to the official release asset (`aether-linux-x86_64.tar.gz`, `aether-linux-arm64.tar.gz`, `aether-linux-armv7.tar.gz`), downloads from `github.com/CluvexStudio/Aether/releases/latest`, extracts to `~/.local/share/omarchy-aether/bin/`, and pins it as the active core. If GitHub is unreachable directly while the tunnel is up, it retries through the local SOCKS5 port. Downloads are not checksum-verified.
+`aether-ctl install` maps `uname -m` to the official release asset (`aether-linux-x86_64.tar.gz`, `aether-linux-arm64.tar.gz`, `aether-linux-armv7.tar.gz`), downloads the pinned release `AETHER_CORE_VERSION` from `github.com/CluvexStudio/Aether/releases/download/<version>`, verifies the archive against the SHA-256 checksums committed in `bin/aether-ctl`, and extracts only the expected members (rejecting absolute paths, `..`, links, and extra members) into `~/.local/share/omarchy-aether/bin/`, then pins it as the active core. If GitHub is unreachable directly while the tunnel is up, it retries through the local SOCKS5 port. Downloads are capped at 64 MiB. Upgrades require bumping `AETHER_CORE_VERSION` and its committed checksums.
 
 ## Omarchy integration
 
@@ -172,7 +172,7 @@ The plugin `id` is `cluvex.aether` — historical (named after the upstream core
 
 ## Limitations
 
-- Downloads of release archives are not checksum-verified.
+- Core installs are pinned to `AETHER_CORE_VERSION` in `bin/aether-ctl` (checksum-verified); newer upstream releases require a plugin update.
 - Live Logs is polling (last 100 lines), not a streamed tail.
 - Tor support depends on the installed core being built with the `tor` cargo feature; the plugin passes the flags regardless.
 - Env-only tuning without a flag (`AETHER_TOR_STALL_SECS`, `AETHER_TOR_CHECK`, `AETHER_TOR_LOG`, …) is not exposed; `AETHER_TOR_COUNTRY` is.
