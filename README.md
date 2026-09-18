@@ -34,7 +34,7 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 **Popup panel — Settings tab**
 
 - Shows the active core binary, its version, and `CAP_NET_ADMIN` status.
-- Switch between every Aether core discovered on your system, or download the latest official release from GitHub with one click.
+- Switch between every Aether core discovered on your system, or download the pinned, checksum-verified official release from GitHub with one click.
 - IP version (IPv4 / IPv6 / dual), quick reconnect, TLS ClientHello fragmentation, Encrypted Client Hello, QUIC v2 opener, data-plane probe skip, firewall mark.
 - **Advanced section** — every remaining Aether CLI flag has a control here: forced peers (`--peer`, `--wg-peer`, `--h2-peer`), WARP-in-WARP and MASQUE-in-MASQUE endpoints, upstream proxy chaining, tunnel resolvers, routing block/direct lists, Zero Trust enrolment (team, service tokens, e-mail, gateway), all three Tor modes with bridges and pluggable transports, validation/startup/reconnect timing, WireGuard keepalive, TLS groups, resource profile, log level, and a verbatim extra-arguments escape hatch.
 
@@ -86,7 +86,7 @@ The plugin controls an Aether binary; it does not ship one. It is kept up-to-dat
 
 To set up a core manually, drop the binary at any of those locations (e.g. `~/.local/bin/aether`), make it executable, and it will be discovered — or point the custom path at it.
 
-- **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the latest official release from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/` and pins it as the active core.
+- **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the version-pinned, SHA-256-verified release asset from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/` and pins it as the active core.
 - **Switch/activate:** every discovered core is listed in the Settings tab; click **Use** to activate it.
 - **Remove:** non-active cores can be deleted from the same list (**Remove**, with a confirmation). The plugin-managed directory is removed as a whole; a binary anywhere else is deleted individually.
 
