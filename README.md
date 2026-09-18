@@ -158,13 +158,14 @@ The Routing tab can route every application's traffic through the tunnel — not
 
 **Setup**
 
-1. Open the **Routing** tab and press **Download & Install Zeptun** (or install Zeptun yourself; the plugin discovers `~/.local/share/omarchy-aether/bin/zeptun`, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `$PATH`, or set a path in the tab).
-2. Grant the engine the **one** capability it needs, `CAP_NET_ADMIN` (it creates the TUN device and installs policy routes):
+1. Connect the Aether tunnel.
+2. Open the **Routing** tab and press **Download & Install Zeptun** (or install Zeptun yourself; the plugin discovers `~/.local/share/omarchy-aether/bin/zeptun`, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `$PATH`, or set a path in the tab).
+3. Grant `CAP_NET_ADMIN` privileges: both Zeptun (to create the TUN device and routing policy) and the Aether core (for `SO_MARK 0xff` routing loop prevention) require this capability. The plugin requests this via polkit password prompt automatically during install / first start. If granting manually:
    ```sh
    sudo setcap cap_net_admin+ep ~/.local/share/omarchy-aether/bin/zeptun
+   sudo setcap cap_net_admin+ep ~/.local/share/omarchy-aether/bin/aether
    ```
-   The plugin never runs as root and attempts this grant non-interactively for you when possible.
-3. Flip **System-wide routing** on. The engine starts only when Aether is connected; flipping it off (or stopping Aether) always brings routing down first.
+4. Toggle **System-wide routing** on (or click **Start**). The engine launches only when Aether is connected; toggling off (or stopping Aether) always brings routing down first.
 
 **Safety model**
 
@@ -176,13 +177,14 @@ The Routing tab can route every application's traffic through the tunnel — not
 
 **Rollback**
 
-Flip the master switch off (or `omarchy-shell cluvex.aether systemRouteStop`), then remove the capability if you want:
+Toggle the switch off (or `omarchy-shell cluvex.aether systemRouteStop`), then remove the capabilities if desired:
 
 ```sh
 sudo setcap -r ~/.local/share/omarchy-aether/bin/zeptun
+sudo setcap -r ~/.local/share/omarchy-aether/bin/aether
 ```
 
-`aether-ctl zeptun-remove` deletes the managed engine binary; disabling the tab's switch leaves nothing running and no routing state behind.
+`aether-ctl zeptun-remove` deletes the managed engine binary; disabling routing leaves nothing running and no routing state behind.
 
 ## IPC
 

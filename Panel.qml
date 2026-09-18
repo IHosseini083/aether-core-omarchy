@@ -861,9 +861,10 @@ Panel {
             }
 
             ToggleSwitch {
-              checked: aether.sysroute_enabled
-              busy: aether.actionInProgress
-              onToggled: aether.setSysrouteEnabled(!aether.sysroute_enabled)
+              checked: aether.zeptun_state === "RUNNING" || aether.zeptun_state === "STARTING"
+              busy: aether.actionInProgress || aether.zeptun_state === "STARTING" || aether.zeptun_state === "STOPPING"
+              enabled: aether.zeptun_available && aether.connected && !aether.actionInProgress
+              onToggled: aether.toggleSystemRoute()
             }
           }
 
@@ -875,6 +876,16 @@ Panel {
             font.pixelSize: Style.font.caption
             color: root.dim
             elide: Text.ElideMiddle
+          }
+
+          Text {
+            width: parent.width
+            visible: aether.zeptun_available && !aether.connected && aether.zeptun_state !== "RUNNING"
+            wrapMode: Text.Wrap
+            text: "Connect Aether tunnel first to enable system routing."
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.dim
           }
 
           Text {
@@ -894,7 +905,7 @@ Panel {
             Button {
               Layout.fillWidth: true
               text: "Start"
-              enabled: aether.sysroute_enabled && aether.connected && aether.zeptun_state !== "RUNNING" && aether.zeptun_state !== "STARTING" && !aether.actionInProgress
+              enabled: aether.zeptun_available && aether.connected && aether.zeptun_state !== "RUNNING" && aether.zeptun_state !== "STARTING" && !aether.actionInProgress
               onClicked: aether.systemRouteStart()
             }
 
@@ -908,7 +919,7 @@ Panel {
             Button {
               Layout.fillWidth: true
               text: "Restart"
-              enabled: aether.zeptun_state === "RUNNING" && !aether.actionInProgress
+              enabled: aether.zeptun_state === "RUNNING" && aether.connected && !aether.actionInProgress
               onClicked: aether.systemRouteRestart()
             }
           }

@@ -166,15 +166,20 @@ Normal mode never changes; Zeptun runs only on explicit request and only while A
 
 ### Privileges
 
-Zeptun needs exactly one capability: **`CAP_NET_ADMIN`** — creating the TUN device and installing addresses/routes/policy rules via netlink. `zeptun-install` attempts `sudo -n setcap cap_net_admin+ep` non-interactively and otherwise prints the exact command for the user to run once. The plugin itself never runs as root. No `CAP_NET_RAW` and no other privileges are requested; ICMP handling runs over the TUN file descriptor, not raw sockets. `aether-ctl status` reports `zeptun_has_cap_net_admin` so the UI can show what's missing before a start attempt fails.
+System-wide routing requires `CAP_NET_ADMIN` on two binaries:
+1. **Zeptun engine**: creates the TUN interface (`zeptun0`) and installs netlink routes and policy rules for table `8891`.
+2. **Aether core**: applies `SO_MARK 0xff` to its upstream tunnel sockets for loop prevention so its traffic bypasses the TUN policy rule.
+
+The plugin never runs as root. During `zeptun-install` and on first routing start, `ensure_cap_net_admin` attempts non-interactive `sudo -n setcap` first, then prompts via polkit (`pkexec`) if needed. If neither is available, it surfaces the exact `sudo setcap cap_net_admin+ep` commands. No other privileges are needed; ICMP runs over the TUN file descriptor without raw sockets.
 
 ### Lifecycle & watchdog
 
-States: `DISABLED → STOPPED → STARTING → RUNNING → STOPPING → FAILED`, persisted in `data/zeptun.state` (state, pid, timestamp, retries, error). `DISABLED` is derived whenever `sysroute_enabled` is off.
+States: `DISABLED → STOPPED → STARTING → RUNNING → STOPPING → FAILED`, persisted in `data/zeptun.state` (state, pid, timestamp, retries, error).
 
-- `system-route start` refuses to run without: engine present, `CAP_NET_ADMIN`, Aether running, and the SOCKS5 endpoint passing a bounded probe (3 attempts). It generates `data/zeptun.toml` (preset `desktop`, tun `zeptun0`, `auto_route`, table `8891`, fwmark `255`, strict route, baseline + user + endpoint excludes, per-config DNS/UDP), launches the engine with `setsid`, and marks `RUNNING` only after: TUN device visible (≤ 5 s), policy rule for table `8891` present (≤ 2 s), and an unproxied end-to-end check returning `warp=on` (3 attempts). Any failure → teardown → `FAILED` with the engine log's last error line.
-- The watchdog runs inside `status` (bounded, cheap): detects a dead engine (`RUNNING` with no live, identity-verified PID) → cleans up → bounded retry (crash counter, 2/4/8 s backoff, max 3, reset on success); reaps `STARTING` > 45 s and `STOPPING` > 15 s; and in persistent mode spawns a detached `system-route start` whenever Aether is connected and the engine is `STOPPED`/retryable-`FAILED`. Heavy work always happens in the detached attempt, so `status` and IPC stay prompt.
-- `aether-ctl stop` (and any Aether stop path) brings system routing down **first**; `system-route stop` escalates `SIGINT → SIGTERM → SIGKILL` on the identity-verified PID only, then removes leftover state.
+- `system-route start` refuses to run without: engine present, `CAP_NET_ADMIN` on both binaries, Aether running with `--mark 0xff`, and the SOCKS5 endpoint passing a bounded probe (3 attempts). It generates `data/zeptun.toml` (preset `desktop`, tun `zeptun0`, `auto_route`, table `8891`, fwmark `255`, strict route, baseline + user + endpoint excludes, per-config DNS/UDP), launches the engine, and marks `RUNNING` only after: TUN device visible (≤ 5 s), policy rule for table `8891` present (≤ 2 s), and an unproxied end-to-end check returning `warp=on` (3 attempts). Any failure → teardown → `FAILED` with the engine log's last error line.
+- The UI ToggleSwitch tracks true engine state (`RUNNING` / `STARTING`), while Start / Stop / Restart buttons are context-aware and enabled on clean install without manual config prerequisites.
+- The watchdog runs inside `status` and `system-route status` (bounded, cheap): detects a dead engine (`RUNNING` with no live, identity-verified PID) → cleans up → bounded retry (crash counter, 2/4/8 s backoff, max 3, reset on success); reaps `STARTING` > 45 s and `STOPPING` > 15 s; and in persistent mode spawns a detached `system-route start` whenever Aether is connected and the engine is `STOPPED`/retryable-`FAILED`.
+- `aether-ctl stop` (and any Aether stop path) brings system routing down **first**; `system-route stop` escalates `SIGINT → SIGTERM → SIGKILL` on the identity-verified PID only, sweeps reserved table rules, and removes leftover state.
 
 ### Routing & DNS behavior
 

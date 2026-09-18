@@ -111,7 +111,7 @@ Item {
 
   readonly property string ctlPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl"
   readonly property string heroPhrase: Model.getHeroPhrase(phraseIndex)
-  readonly property string statusSummary: !installed ? "Aether core not found" : (!running ? "Disconnected" : (connected ? "Connected · " + Model.formatColo(colo, loc) : "Connecting to WARP…"))
+  readonly property string statusSummary: !installed ? "Aether core not found" : (!running ? "Disconnected" : (connected ? "Connected · " + Model.formatColo(colo, loc) + (zeptun_state === "RUNNING" ? " · TUN" : "") : "Connecting to WARP…"))
   readonly property string zeptunStatusSummary: Model.zeptunStateLabel(zeptun_state, zeptun_error, zeptun_available)
 
   function refresh() {
@@ -171,6 +171,14 @@ Item {
 
   function systemRouteRestart() {
     runAction(["system-route", "restart"], "Restarting system routing…")
+  }
+
+  function toggleSystemRoute() {
+    if (zeptun_state === "RUNNING" || zeptun_state === "STARTING") {
+      systemRouteStop()
+    } else {
+      systemRouteStart()
+    }
   }
 
   function setSysrouteEnabled(enabled) {

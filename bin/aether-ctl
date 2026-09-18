@@ -1037,6 +1037,9 @@ cmd_system_route_start() {
 }
 
 cmd_system_route_stop() {
+  SYSROUTE_ENABLED="0"
+  save_config
+
   zeptun_state_read
   if [[ "$Z_STATE" != "RUNNING" && "$Z_STATE" != "STARTING" && "$Z_STATE" != "STOPPING" ]]; then
     # Still sweep in case of stale state.
@@ -1057,7 +1060,10 @@ cmd_system_route_status() {
   zeptun_watchdog
   zeptun_state_read
   local zstate="$Z_STATE"
-  [[ "$SYSROUTE_ENABLED" != "1" ]] && { zstate="DISABLED"; Z_ERR=""; }
+  if [[ "$SYSROUTE_ENABLED" != "1" && "$zstate" != "FAILED" && "$zstate" != "STOPPING" ]]; then
+    zstate="DISABLED"
+    Z_ERR=""
+  fi
   local zbin zpid
   zbin=$(zeptun_discover_bin_cached || true)
   zpid=$(zeptun_get_pid || true)
@@ -1394,7 +1400,10 @@ cmd_status() {
   local zpid
   zpid=$(zeptun_get_pid || true)
   local zstate="$Z_STATE"
-  [[ "$SYSROUTE_ENABLED" != "1" ]] && { zstate="DISABLED"; Z_ERR=""; }
+  if [[ "$SYSROUTE_ENABLED" != "1" && "$zstate" != "FAILED" && "$zstate" != "STOPPING" ]]; then
+    zstate="DISABLED"
+    Z_ERR=""
+  fi
   local znow zuptime=0
   znow=$(date +%s)
   [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && zuptime=$(( znow - Z_TS ))
@@ -1747,6 +1756,12 @@ cmd_install() {
 
   echo "Installed Aether ${AETHER_CORE_VERSION} to $BIN_DIR/aether"
 
+  # Grant CAP_NET_ADMIN non-interactively if sudo is cached, preparing SO_MARK
+  # capability for when system routing is enabled.
+  if command -v setcap &>/dev/null && sudo -n setcap cap_net_admin+ep "$BIN_DIR/aether" 2>/dev/null; then
+    echo "Granted CAP_NET_ADMIN to Aether core."
+  fi
+
   if is_running; then
     echo "Restarting tunnel with the new core…"
     cmd_restart
@@ -1839,6 +1854,13 @@ cmd_zeptun_install() {
   # the plugin itself never runs as root.
   if ! zeptun_ensure_cap "$BIN_DIR/zeptun"; then
     zeptun_log "CAP_NET_ADMIN not granted during install"
+  fi
+
+  # Also grant CAP_NET_ADMIN to Aether core if present, ensuring SO_MARK is ready
+  # without requiring a second prompt later when system routing is started.
+  local abin
+  if abin=$(detect_aether_bin 2>/dev/null) && [[ -n "$abin" ]]; then
+    ensure_cap_net_admin "$abin" "Aether core" || true
   fi
 
   # If the engine is already running, bounce it onto the new binary
