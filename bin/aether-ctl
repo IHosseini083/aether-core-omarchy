@@ -1959,15 +1959,15 @@ cmd_install() {
 # The engine is executed, so its release is pinned and checksum-verified the
 # same way as the core. To upgrade: bump ZEPTUN_VERSION and replace the
 # hashes below with the values from the release's SHA256SUMS asset.
-ZEPTUN_VERSION="v1.0.0"
+ZEPTUN_VERSION="v1.1.1"
 ZEPTUN_MAX_BYTES=$((8 * 1024 * 1024))
 
 zeptun_expected_sha256() {
   case "$1" in
-    zeptun-linux-x86_64) echo "4c05802082c346a35a63d61c6d587e8d8187705c672989b5b9c1815ffdc6178d" ;;
-    zeptun-linux-arm64)  echo "c3a611393d92e1f03023b5ecfe2b6c798b6c7ca24177ee362d153d89fab3a308" ;;
-    zeptun-linux-armv7)  echo "709572e4bf9d015845a26f372fb285d711ee6d95869089297be0c320b80ae9ea" ;;
-    zeptun-linux-i686)   echo "b7fd045de5d7cb3300f6e829a7f0d55961c4a070facc55fa00ef6d425a3e24c8" ;;
+    zeptun-linux-x86_64) echo "daafa86ce3239b2ba9614facbb9a60927dfc4a87d02f358062f25b8677bd9399" ;;
+    zeptun-linux-arm64)  echo "3d68d84dbb4539ee92d9bedcda3f36656206f575e036d7960507edddf957f84e" ;;
+    zeptun-linux-armv7)  echo "d848064e665f9f9624dd806986c2c9c02bdf424e67d5312eeaeacd862593e9e9" ;;
+    zeptun-linux-i686)   echo "2501bd3b40097d1a79a6a48d66567ff1bc2e6ccf471d3511f60c33044c41da74" ;;
     *) return 1 ;;
   esac
 }
