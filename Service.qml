@@ -12,6 +12,8 @@ Item {
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""
+  property string core_pinned_version: ""
+  property bool core_update_available: false
   property bool hasCapNetAdmin: false
   property var discoveredCores: []
   property bool running: false
@@ -83,6 +85,8 @@ Item {
   property bool zeptun_available: false
   property string zeptun_binary: ""
   property string zeptun_version: ""
+  property string zeptun_pinned_version: ""
+  property bool zeptun_update_available: false
   property string zeptun_pid: ""
   property string zeptun_tun: "zeptun0"
   property bool zeptun_has_cap_net_admin: false
@@ -211,6 +215,14 @@ Item {
     installProcess.running = true
   }
 
+  function updateAetherCore() {
+    installAether()
+  }
+
+  function updateZeptun() {
+    runAction(["zeptun-install"], "Updating Zeptun to " + (zeptun_pinned_version || "latest pinned") + "…")
+  }
+
   function setConfig(key, value) {
     runAction(["set", key, String(value)], "Applying " + key + "…")
   }
@@ -309,6 +321,8 @@ Item {
         root.installed = data.installed
         root.binary = data.binary
         root.binaryVersion = data.binary_version
+        root.core_pinned_version = data.core_pinned_version
+        root.core_update_available = data.core_update_available
         root.hasCapNetAdmin = data.has_cap_net_admin
         root.discoveredCores = data.discovered_cores
         root.running = data.running
@@ -374,6 +388,8 @@ Item {
         root.zeptun_available = data.zeptun_available
         root.zeptun_binary = data.zeptun_binary
         root.zeptun_version = data.zeptun_version
+        root.zeptun_pinned_version = data.zeptun_pinned_version
+        root.zeptun_update_available = data.zeptun_update_available
         root.zeptun_pid = data.zeptun_pid
         root.zeptun_tun = data.zeptun_tun
         root.zeptun_has_cap_net_admin = data.zeptun_has_cap_net_admin

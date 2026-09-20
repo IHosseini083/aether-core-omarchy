@@ -185,14 +185,14 @@ Panel {
 
             Button {
               Layout.fillWidth: true
-              text: "Cores"
+              text: aether.core_update_available ? "Cores •" : "Cores"
               selected: root.currentTab === "settings"
               onClicked: root.currentTab = "settings"
             }
 
             Button {
               Layout.fillWidth: true
-              text: "Routing"
+              text: aether.zeptun_update_available ? "Routing •" : "Routing"
               selected: root.currentTab === "routing"
               onClicked: root.currentTab = "routing"
             }
@@ -676,6 +676,49 @@ Panel {
         }
       }
 
+      // Aether core update available banner
+      BorderSurface {
+        visible: aether.core_update_available
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+        borderSpec: Border.flat(root.accent, 1)
+        implicitHeight: updateCoreCol.implicitHeight + Style.space(20)
+
+        Column {
+          id: updateCoreCol
+          width: parent.width - Style.space(24)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          Text {
+            width: parent.width
+            text: "Aether Core Update Available"
+            color: root.accent
+            font.bold: true
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.subtitle
+          }
+
+          Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: "A newer Aether core is pinned by the plugin (" + (aether.binaryVersion !== "" ? aether.binaryVersion : "installed") + " → " + aether.core_pinned_version + "). Update to get the latest core release."
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Button {
+            text: aether.installing ? "Downloading Official Release…" : "Update Core to " + (aether.core_pinned_version !== "" ? aether.core_pinned_version : "Latest")
+            accent: root.accent
+            bordered: true
+            enabled: !aether.installing
+            onClicked: aether.updateAetherCore()
+          }
+        }
+      }
+
       // Discovered Cores
       PanelSectionHeader {
         text: "DISCOVERED CORES"
@@ -875,6 +918,49 @@ Panel {
             bordered: true
             enabled: !aether.actionInProgress
             onClicked: aether.runAction(["zeptun-install"], "Downloading Zeptun…")
+          }
+        }
+      }
+
+      // Zeptun update available banner
+      BorderSurface {
+        visible: aether.zeptun_available && aether.zeptun_update_available
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+        borderSpec: Border.flat(root.accent, 1)
+        implicitHeight: updateZeptunCol.implicitHeight + Style.space(20)
+
+        Column {
+          id: updateZeptunCol
+          width: parent.width - Style.space(24)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          Text {
+            width: parent.width
+            text: "Zeptun Engine Update Available"
+            color: root.accent
+            font.bold: true
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.subtitle
+          }
+
+          Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: "A newer Zeptun engine is pinned by the plugin (" + (aether.zeptun_version !== "" ? aether.zeptun_version : "installed") + " → " + aether.zeptun_pinned_version + "). Update to keep system routing aligned with the plugin."
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Button {
+            text: aether.actionInProgress ? "Updating Zeptun…" : "Update Zeptun to " + (aether.zeptun_pinned_version !== "" ? aether.zeptun_pinned_version : "Latest")
+            accent: root.accent
+            bordered: true
+            enabled: !aether.actionInProgress
+            onClicked: aether.updateZeptun()
           }
         }
       }

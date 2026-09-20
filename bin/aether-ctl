@@ -357,6 +357,21 @@ get_zeptun_version() {
   fi
 }
 
+is_version_older() {
+  local v1="$1" v2="$2"
+  v1="${v1#zeptun }"
+  v1="${v1#aether }"
+  v1="${v1#v}"
+  v1=$(echo "$v1" | awk '{print $1}')
+  v2="${v2#zeptun }"
+  v2="${v2#aether }"
+  v2="${v2#v}"
+  v2=$(echo "$v2" | awk '{print $1}')
+
+  [[ -n "$v1" && -n "$v2" ]] || return 1
+  [[ "$v1" != "$v2" && $(printf '%s\n%s\n' "$v1" "$v2" | sort -V | head -n1) == "$v1" ]]
+}
+
 find_all_cores() {
   # Discovery probes every candidate with `--help`; the status poll would
   # repeat that every few seconds. Cache results for a short TTL and drop
@@ -1514,12 +1529,16 @@ cmd_status() {
   local installed="false"
   local bin_version=""
   local has_cap="false"
+  local core_update="false"
 
   if [[ -n "$bin" ]]; then
     installed="true"
     bin_version=$(get_binary_version "$bin")
     if has_cap_net_admin "$bin"; then
       has_cap="true"
+    fi
+    if [[ "$bin" == "$BIN_DIR/aether" ]] && is_version_older "$bin_version" "$AETHER_CORE_VERSION"; then
+      core_update="true"
     fi
   fi
 
@@ -1577,7 +1596,13 @@ cmd_status() {
   [[ "$zstate" == "RUNNING" && "$Z_TS" -gt 0 ]] && zuptime=$(( znow - Z_TS ))
   [[ "$zstate" != "RUNNING" ]] && zpid=""
   local zversion=""
-  [[ -n "$zbin" ]] && zversion=$(get_zeptun_version "$zbin")
+  local zupdate="false"
+  if [[ -n "$zbin" ]]; then
+    zversion=$(get_zeptun_version "$zbin")
+    if [[ "$zbin" == "$BIN_DIR/zeptun" ]] && is_version_older "$zversion" "$ZEPTUN_VERSION"; then
+      zupdate="true"
+    fi
+  fi
   local plug_version
   plug_version=$(get_plugin_version)
 
@@ -1587,6 +1612,8 @@ cmd_status() {
   "installed": $installed,
   "binary": $(json_str "$bin"),
   "binary_version": $(json_str "$bin_version"),
+  "core_pinned_version": $(json_str "$AETHER_CORE_VERSION"),
+  "core_update_available": $core_update,
   "has_cap_net_admin": $has_cap,
   "running": $running,
   "pid": $(json_str "${pid:-}"),
@@ -1648,6 +1675,8 @@ cmd_status() {
   "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
   "zeptun_binary": $(json_str "$zbin"),
   "zeptun_version": $(json_str "$zversion"),
+  "zeptun_pinned_version": $(json_str "$ZEPTUN_VERSION"),
+  "zeptun_update_available": $zupdate,
   "zeptun_pid": $(json_str "${zpid:-}"),
   "zeptun_tun": $(json_str "$ZEPTUN_TUN"),
   "zeptun_has_cap_net_admin": $zcap,
@@ -2072,6 +2101,40 @@ cmd_zeptun_remove() {
   fi
 }
 
+cmd_update_cores() {
+  local updated=0
+  local zbin="$BIN_DIR/zeptun"
+  local abin="$BIN_DIR/aether"
+
+  if [[ -f "$zbin" ]]; then
+    local zver
+    zver=$(get_zeptun_version "$zbin")
+    if is_version_older "$zver" "$ZEPTUN_VERSION"; then
+      echo "Upgrading managed Zeptun from $zver to $ZEPTUN_VERSION..."
+      cmd_zeptun_install
+      updated=1
+    else
+      echo "Managed Zeptun is up to date ($zver)."
+    fi
+  fi
+
+  if [[ -f "$abin" ]]; then
+    local aver
+    aver=$(get_binary_version "$abin")
+    if is_version_older "$aver" "$AETHER_CORE_VERSION"; then
+      echo "Upgrading managed Aether core from $aver to $AETHER_CORE_VERSION..."
+      cmd_install
+      updated=1
+    else
+      echo "Managed Aether core is up to date ($aver)."
+    fi
+  fi
+
+  if [[ "$updated" -eq 0 ]]; then
+    echo "All managed cores are up to date with the plugin's pinned releases."
+  fi
+}
+
 cmd_set_config() {
   local key="${1:-}"
   local val="${2:-}"
@@ -2383,8 +2446,9 @@ case "${1:-status}" in
   zeptun-clear-logs) cmd_zeptun_clear_logs ;;
   zeptun-install) cmd_zeptun_install ;;
   zeptun-remove) cmd_zeptun_remove ;;
+  update-cores|upgrade) cmd_update_cores ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove|update-cores}"
     exit 1
     ;;
 esac
