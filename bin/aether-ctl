@@ -2091,14 +2091,46 @@ cmd_zeptun_install() {
 }
 
 cmd_zeptun_remove() {
-  if [[ -f "$BIN_DIR/zeptun" ]]; then
+  local target="${1:-}"
+  if [[ -z "$target" ]]; then
+    target="$(zeptun_discover_bin_cached 2>/dev/null || true)"
+    [[ -n "$target" ]] || target="$BIN_DIR/zeptun"
+  fi
+  target="$(readlink -f "$target" 2>/dev/null || echo "$target")"
+
+  zeptun_state_read
+  if [[ "$Z_STATE" == "RUNNING" || "$Z_STATE" == "STARTING" || "$Z_STATE" == "STOPPING" ]]; then
+    echo "Stopping system routing before removing Zeptun…"
+    cmd_system_route_stop >/dev/null 2>&1 || true
+    zeptun_state_write "STOPPED" "" "$Z_RETRIES" ""
+  fi
+
+  if [[ -f "$target" ]]; then
+    if [[ "$target" == "$BIN_DIR/zeptun" ]]; then
+      rm -f "$BIN_DIR/zeptun" "$BIN_DIR/zeptun.new"
+      rmdir "$BIN_DIR" 2>/dev/null || true
+      echo "Removed managed Zeptun binary from $BIN_DIR"
+    else
+      if ! rm -f "$target" "${target}.new" 2>/dev/null; then
+        echo "Error: failed to remove '$target' (permission denied?)." >&2
+        return 1
+      fi
+      echo "Removed Zeptun binary ($target)"
+    fi
+  elif [[ -f "$BIN_DIR/zeptun" ]]; then
     rm -f "$BIN_DIR/zeptun" "$BIN_DIR/zeptun.new"
     rmdir "$BIN_DIR" 2>/dev/null || true
-    rm -f "$RUN_DIR/zeptun.cache" 2>/dev/null || true
-    echo "Removed the managed Zeptun binary."
+    echo "Removed managed Zeptun binary from $BIN_DIR"
   else
-    echo "No managed Zeptun binary found."
+    echo "No Zeptun binary found at $target."
   fi
+
+  if [[ -n "$ZEPTUN_BIN" && "$(readlink -f "$ZEPTUN_BIN" 2>/dev/null || echo "$ZEPTUN_BIN")" == "$target" ]]; then
+    ZEPTUN_BIN=""
+    save_config
+  fi
+
+  rm -f "$RUN_DIR/zeptun.cache" 2>/dev/null || true
 }
 
 cmd_update_cores() {
@@ -2383,7 +2415,8 @@ cmd_clear_cache() {
 
 cmd_remove_core() {
   local target="${1:-}"
-  [[ -n "$target" ]] || { echo "Path required" >&2; return 1; }
+  [[ -n "$target" ]] || target="$(detect_aether_bin || true)"
+  [[ -n "$target" ]] || { echo "No core found to remove." >&2; return 1; }
 
   target="$(readlink -f "$target" 2>/dev/null || echo "$target")"
 
@@ -2395,8 +2428,10 @@ cmd_remove_core() {
   local active
   active=$(detect_aether_bin || true)
   if [[ -n "$active" && "$target" == "$active" ]]; then
-    echo "Error: cannot remove the active core. Switch to another core first." >&2
-    return 1
+    if is_daemon_running; then
+      echo "Stopping Aether daemon before removing active core…"
+      cmd_stop >/dev/null 2>&1 || true
+    fi
   fi
 
   if [[ "$target" == "$BIN_DIR/aether" ]]; then
@@ -2407,8 +2442,16 @@ cmd_remove_core() {
     rmdir "$BIN_DIR" 2>/dev/null || true
     echo "Removed managed core files from $BIN_DIR"
   else
-    rm -f "$target"
+    if ! rm -f "$target" 2>/dev/null; then
+      echo "Error: failed to remove '$target' (permission denied?)." >&2
+      return 1
+    fi
     echo "Removed $target"
+  fi
+
+  if [[ -n "$CUSTOM_BIN" && "$(readlink -f "$CUSTOM_BIN" 2>/dev/null || echo "$CUSTOM_BIN")" == "$target" ]]; then
+    CUSTOM_BIN=""
+    save_config
   fi
 
   rm -f "$RUN_DIR/cores.cache" 2>/dev/null || true
@@ -2445,10 +2488,10 @@ case "${1:-status}" in
   zeptun-logs) cmd_zeptun_logs "${2:-60}" ;;
   zeptun-clear-logs) cmd_zeptun_clear_logs ;;
   zeptun-install) cmd_zeptun_install ;;
-  zeptun-remove) cmd_zeptun_remove ;;
+  zeptun-remove) shift; cmd_zeptun_remove "${1:-}" ;;
   update-cores|upgrade) cmd_update_cores ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core <path>|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove|update-cores}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core [path]|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove [path]|update-cores}"
     exit 1
     ;;
 esac

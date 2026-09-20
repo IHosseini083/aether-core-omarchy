@@ -16,6 +16,7 @@ Panel {
 
   property string currentTab: "controls" // "controls" | "settings" | "routing" | "advanced" | "logs"
   property string pendingRemovePath: ""
+  property string pendingRemoveZeptunPath: ""
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -346,6 +347,22 @@ Panel {
           root.pendingRemovePath = ""
         }
       }
+
+      ConfirmDialog {
+        anchors.fill: parent
+        opened: root.pendingRemoveZeptunPath !== ""
+        message: "Remove Zeptun engine from your system?\n" + root.pendingRemoveZeptunPath
+        confirmText: "Remove"
+        background: Color.background
+        foreground: root.foreground
+        selectedText: root.accent
+        fontFamily: root.fontFamily
+        onCanceled: root.pendingRemoveZeptunPath = ""
+        onConfirmed: {
+          aether.removeZeptun(root.pendingRemoveZeptunPath)
+          root.pendingRemoveZeptunPath = ""
+        }
+      }
     }
   }
 
@@ -672,6 +689,15 @@ Panel {
               font.pixelSize: Style.font.caption
               color: aether.hasCapNetAdmin ? root.accent : root.dim
             }
+
+            Item { Layout.fillWidth: true }
+
+            Button {
+              visible: aether.binary !== ""
+              text: "Remove"
+              enabled: !aether.actionInProgress
+              onClicked: root.pendingRemovePath = aether.binary
+            }
           }
         }
       }
@@ -767,7 +793,7 @@ Panel {
 
             Button {
               text: "Remove"
-              enabled: aether.binary !== modelData
+              enabled: !aether.actionInProgress
               onClicked: root.pendingRemovePath = modelData
             }
           }
@@ -782,6 +808,55 @@ Panel {
         accent: root.accent
         bordered: true
         onClicked: aether.installAether()
+      }
+
+      PanelSeparator { width: parent.width }
+
+      // Routing Engine (Zeptun)
+      PanelSectionHeader {
+        text: "ROUTING ENGINE (ZEPTUN)"
+        foreground: root.foreground
+      }
+
+      BorderSurface {
+        visible: aether.zeptun_available
+        width: parent.width
+        radius: Style.cornerRadius
+        implicitHeight: Style.space(40)
+        color: "transparent"
+        borderSpec: Border.controlSpec("normal", root.foreground, root.accent)
+
+        RowLayout {
+          anchors.fill: parent
+          anchors.leftMargin: Style.space(10)
+          anchors.rightMargin: Style.space(10)
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: aether.zeptun_binary !== "" ? aether.zeptun_binary : "Zeptun"
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.foreground
+            elide: Text.ElideMiddle
+          }
+
+          Button {
+            text: "Remove"
+            enabled: !aether.actionInProgress
+            onClicked: root.pendingRemoveZeptunPath = (aether.zeptun_binary !== "" ? aether.zeptun_binary : "zeptun")
+          }
+        }
+      }
+
+      Button {
+        visible: !aether.zeptun_available
+        width: parent.width
+        text: aether.installing ? "Downloading Zeptun…" : "Download & Install Zeptun"
+        enabled: !aether.installing
+        accent: root.accent
+        bordered: true
+        onClicked: aether.runAction(["zeptun-install"], "Downloading Zeptun…")
       }
 
       PanelSeparator { width: parent.width }
@@ -1064,6 +1139,44 @@ Panel {
               enabled: aether.zeptun_state === "RUNNING" && aether.connected && !aether.actionInProgress
               onClicked: aether.systemRouteRestart()
             }
+          }
+        }
+      }
+
+      // Engine binary card
+      PanelSectionHeader {
+        visible: aether.zeptun_available
+        text: "ENGINE BINARY"
+        foreground: root.foreground
+      }
+
+      BorderSurface {
+        visible: aether.zeptun_available
+        width: parent.width
+        radius: Style.cornerRadius
+        implicitHeight: Style.space(40)
+        color: "transparent"
+        borderSpec: Border.controlSpec("normal", root.foreground, root.accent)
+
+        RowLayout {
+          anchors.fill: parent
+          anchors.leftMargin: Style.space(10)
+          anchors.rightMargin: Style.space(10)
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: aether.zeptun_binary !== "" ? aether.zeptun_binary : "Zeptun"
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.foreground
+            elide: Text.ElideMiddle
+          }
+
+          Button {
+            text: "Remove"
+            enabled: !aether.actionInProgress
+            onClicked: root.pendingRemoveZeptunPath = (aether.zeptun_binary !== "" ? aether.zeptun_binary : "zeptun")
           }
         }
       }

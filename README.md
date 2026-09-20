@@ -115,7 +115,7 @@ To set up a core manually, drop the binary at any of those locations (e.g. `~/.l
 
 - **Download:** with no core found, the panel offers **Download & Install Aether Core**, which fetches the version-pinned, SHA-256-verified release asset from [CluvexStudio/Aether releases](https://github.com/CluvexStudio/Aether/releases) into `~/.local/share/omarchy-aether/bin/` and pins it as the active core.
 - **Switch/activate:** every discovered core is listed in the Settings tab; click **Use** to activate it.
-- **Remove:** non-active cores can be deleted from the same list (**Remove**, with a confirmation). The plugin-managed directory is removed as a whole; a binary anywhere else is deleted individually.
+- **Remove:** cores can be deleted from the same list (**Remove**, with a confirmation), even if only one core is installed. Removing the active core stops the tunnel first. The plugin-managed directory is removed as a whole; a binary anywhere else is deleted individually.
 
 Verify a running tunnel yourself:
 
@@ -184,7 +184,7 @@ sudo setcap -r ~/.local/share/omarchy-aether/bin/zeptun
 sudo setcap -r ~/.local/share/omarchy-aether/bin/aether
 ```
 
-`aether-ctl zeptun-remove` deletes the managed engine binary; disabling routing leaves nothing running and no routing state behind.
+`aether-ctl zeptun-remove [path]` deletes the engine binary (also removable via **Remove** in the Routing and Cores tabs); disabling routing leaves nothing running and no routing state behind.
 
 ## IPC
 

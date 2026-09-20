@@ -33,7 +33,7 @@ aether-ctl install                    # download pinned official release (checks
 aether-ctl set <key> <val>            # update one setting (hot-restarts)
 aether-ctl set-protocol <proto> <0|1> # atomic protocol + h2 switch
 aether-ctl cores                      # discovered core binaries
-aether-ctl remove-core <path>         # delete a non-active core (managed dir removed whole)
+aether-ctl remove-core [path]         # delete a core (stops daemon if active; managed dir removed whole)
 aether-ctl logs [N]                   # last N log lines (default 60)
 aether-ctl clear-logs|clear-cache     # housekeeping (cache = lastconn/secondary)
 aether-ctl probe                      # raw curl trace through the tunnel
@@ -43,7 +43,7 @@ aether-ctl system-route stop|restart  # bring routing down / bounce it
 aether-ctl zeptun-logs [N]            # last N lines of the engine log
 aether-ctl zeptun-clear-logs          # truncate the engine log
 aether-ctl zeptun-install             # download pinned Zeptun release (checksum-verified)
-aether-ctl zeptun-remove              # delete the managed engine binary
+aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing if running)
 ```
 
 ### `set` keys
@@ -161,7 +161,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 ### Core remove
 
-`aether-ctl remove-core <path>` deletes a discovered binary after verifying it is a real Aether core and not the active one. Removing the plugin-managed `~/.local/share/omarchy-aether/bin/` binary deletes the whole managed directory (including its `pt/` transports); any other location is deleted as a single file.
+`aether-ctl remove-core [path]` deletes a discovered binary (defaults to active core). If the active core is running, it stops the daemon first. Removing the plugin-managed `~/.local/share/omarchy-aether/bin/` binary deletes the core files (including its `pt/` transports); any other location is deleted as a single file.
 
 ### Persistence
 
@@ -183,7 +183,7 @@ Normal mode never changes; Zeptun runs only on explicit request and only while A
 
 ### Engine install
 
-`aether-ctl zeptun-install` maps `uname -m` to the standalone binary asset (`zeptun-linux-x86_64`, `zeptun-linux-arm64`, `zeptun-linux-armv7`, `zeptun-linux-i686`), downloads the pinned `ZEPTUN_VERSION` from `github.com/Noisemux/zeptun/releases`, verifies the committed SHA-256, and installs it atomically to `~/.local/share/omarchy-aether/bin/zeptun`. Discovery order: `zeptun_bin` config, that managed path, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `which -a zeptun`. Every candidate is validated by running `zeptun help` (bounded, 3 s) and checking for the flags this integration relies on; results are cached for 60 s so the status poll never stalls. `zeptun-remove` deletes the managed binary.
+`aether-ctl zeptun-install` maps `uname -m` to the standalone binary asset (`zeptun-linux-x86_64`, `zeptun-linux-arm64`, `zeptun-linux-armv7`, `zeptun-linux-i686`), downloads the pinned `ZEPTUN_VERSION` from `github.com/Noisemux/zeptun/releases`, verifies the committed SHA-256, and installs it atomically to `~/.local/share/omarchy-aether/bin/zeptun`. Discovery order: `zeptun_bin` config, that managed path, `~/.local/bin/zeptun`, `/usr/local/bin/zeptun`, then `which -a zeptun`. Every candidate is validated by running `zeptun help` (bounded, 3 s) and checking for the flags this integration relies on; results are cached for 60 s so the status poll never stalls. `zeptun-remove [path]` stops system routing if running and deletes the engine binary (also removable via **Remove** in the Routing and Cores tabs).
 
 ### Privileges
 

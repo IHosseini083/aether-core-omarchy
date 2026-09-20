@@ -237,7 +237,19 @@ Item {
   }
 
   function removeCore(path) {
-    runAction(["remove-core", String(path)], "Removing core…")
+    if (path) {
+      runAction(["remove-core", String(path)], "Removing core…")
+    } else {
+      runAction(["remove-core"], "Removing core…")
+    }
+  }
+
+  function removeZeptun(path) {
+    if (path && path !== "zeptun") {
+      runAction(["zeptun-remove", String(path)], "Removing Zeptun…")
+    } else {
+      runAction(["zeptun-remove"], "Removing Zeptun…")
+    }
   }
 
   function clearLogs() {
