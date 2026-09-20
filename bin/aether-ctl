@@ -341,7 +341,7 @@ get_plugin_version() {
   if [[ -f "$manifest" ]]; then
     sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1
   else
-    echo "1.6.0"
+    echo "1.7.0"
   fi
 }
 
