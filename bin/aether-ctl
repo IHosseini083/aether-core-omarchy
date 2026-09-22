@@ -89,7 +89,7 @@ DEFAULT_PSIPHON_CDN_IPS=""
 DEFAULT_PSIPHON_CDN_SNI=""
 DEFAULT_EXIT_LOC=""
 DEFAULT_EXIT_LOC_SECS=""
-DEFAULT_STATS=0
+DEFAULT_STATS=1
 DEFAULT_STATS_SECS=""
 DEFAULT_ACCESS_ID=""
 DEFAULT_ACCESS_SECRET=""
@@ -1578,6 +1578,8 @@ build_args() {
     args+=("--stats")
     if [[ -n "$STATS_SECS" ]]; then
       args+=("--stats-secs" "$STATS_SECS")
+    else
+      args+=("--stats-secs" "15")
     fi
   fi
 
@@ -1675,6 +1677,40 @@ cmd_status() {
     fi
   fi
 
+  local traffic_up=""
+  local traffic_down=""
+  local uptime=""
+
+  if [[ "$running" == "true" ]]; then
+    traffic_up="0 B"
+    traffic_down="0 B"
+    if [[ -n "$pid" ]]; then
+      local ps_etime
+      ps_etime=$(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ' || true)
+      [[ -n "$ps_etime" ]] && uptime="$ps_etime"
+    fi
+
+    if [[ -f "$LOG_FILE" ]]; then
+      local last_launch
+      last_launch=$(grep -n "\[plugin\] Launching" "$LOG_FILE" 2>/dev/null | tail -n 1 | cut -d: -f1 || true)
+      local last_stat=""
+      if [[ -n "$last_launch" ]]; then
+        last_stat=$(tail -n +"$last_launch" "$LOG_FILE" 2>/dev/null | grep -a "aether::stats" | tail -n 1 || true)
+      else
+        last_stat=$(grep -a "aether::stats" "$LOG_FILE" 2>/dev/null | tail -n 1 || true)
+      fi
+      if [[ -n "$last_stat" ]]; then
+        local u_val d_val up_s
+        u_val=$(echo "$last_stat" | sed -n 's/.*up \([0-9.]* [A-Za-z]*\) down.*/\1/p')
+        d_val=$(echo "$last_stat" | sed -n 's/.*down \([0-9.]* [A-Za-z]*\) uptime.*/\1/p')
+        up_s=$(echo "$last_stat" | sed -n 's/.*uptime \([0-9:]*\).*/\1/p')
+        [[ -n "$u_val" ]] && traffic_up="$u_val"
+        [[ -n "$d_val" ]] && traffic_down="$d_val"
+        [[ -n "$up_s" ]] && uptime="$up_s"
+      fi
+    fi
+  fi
+
   local cores_json="[]"
   local core_list=()
   while IFS= read -r c; do
@@ -1730,6 +1766,9 @@ cmd_status() {
   "loc": $(json_str "${loc:-}"),
   "warp": $(json_str "${warp:-}"),
   "latency_ms": $(json_num "${latency:-0}" 0),
+  "traffic_up": $(json_str "$traffic_up"),
+  "traffic_down": $(json_str "$traffic_down"),
+  "uptime": $(json_str "$uptime"),
   "proxy_port": $(json_num "$SOCKS_PORT" 1819),
   "http_proxy_port": $(json_num "$HTTP_PROXY_PORT" 0),
   "protocol": $(json_str "$PROTOCOL"),

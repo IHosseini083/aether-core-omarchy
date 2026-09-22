@@ -26,6 +26,9 @@ Item {
   property string loc: ""
   property string warp: ""
   property int latency: 0
+  property string traffic_up: ""
+  property string traffic_down: ""
+  property string uptime: ""
   property int proxyPort: 1819
   property int httpProxyPort: 0
   property int socks_port: 1819
@@ -388,6 +391,9 @@ Item {
         root.loc = data.loc
         root.warp = data.warp
         root.latency = data.latency_ms
+        root.traffic_up = data.traffic_up
+        root.traffic_down = data.traffic_down
+        root.uptime = data.uptime
         root.proxyPort = data.proxy_port
         root.httpProxyPort = data.http_proxy_port
         root.socks_port = data.proxy_port

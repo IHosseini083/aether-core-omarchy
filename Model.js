@@ -35,6 +35,9 @@ function parseStatus(rawJson) {
     loc: "",
     warp: "",
     latency_ms: 0,
+    traffic_up: "",
+    traffic_down: "",
+    uptime: "",
     proxy_port: 1819,
     http_proxy_port: 0,
     protocol: "masque",
@@ -156,6 +159,9 @@ function parseStatus(rawJson) {
       loc: String(parsed.loc || ""),
       warp: String(parsed.warp || ""),
       latency_ms: Number(parsed.latency_ms) || 0,
+      traffic_up: String(parsed.traffic_up || ""),
+      traffic_down: String(parsed.traffic_down || ""),
+      uptime: String(parsed.uptime || ""),
       proxy_port: Number(parsed.proxy_port) || 1819,
       http_proxy_port: Number(parsed.http_proxy_port) || 0,
       protocol: String(parsed.protocol || "masque"),
@@ -333,11 +339,81 @@ function protocolLabel(proto, h2) {
   }
 }
 
-function formatExitLoc(spec) {
-  if (!spec || spec.trim() === "") return "Worldwide";
+var COUNTRY_METADATA = {
+  "": { flag: "🌐", name: "Worldwide", code: "" },
+  "US": { flag: "🇺🇸", name: "United States", code: "US" },
+  "DE": { flag: "🇩🇪", name: "Germany", code: "DE" },
+  "NL": { flag: "🇳🇱", name: "Netherlands", code: "NL" },
+  "SE": { flag: "🇸🇪", name: "Sweden", code: "SE" },
+  "GB": { flag: "🇬🇧", name: "United Kingdom", code: "GB" },
+  "CH": { flag: "🇨🇭", name: "Switzerland", code: "CH" },
+  "FR": { flag: "🇫🇷", name: "France", code: "FR" },
+  "CA": { flag: "🇨🇦", name: "Canada", code: "CA" },
+  "JP": { flag: "🇯🇵", name: "Japan", code: "JP" },
+  "SG": { flag: "🇸🇬", name: "Singapore", code: "SG" },
+  "FI": { flag: "🇫🇮", name: "Finland", code: "FI" },
+  "PL": { flag: "🇵🇱", name: "Poland", code: "PL" },
+  "AT": { flag: "🇦🇹", name: "Austria", code: "AT" },
+  "IT": { flag: "🇮🇹", name: "Italy", code: "IT" },
+  "ES": { flag: "🇪🇸", name: "Spain", code: "ES" },
+  "TR": { flag: "🇹🇷", name: "Turkey", code: "TR" },
+  "AU": { flag: "🇦🇺", name: "Australia", code: "AU" },
+  "IR": { flag: "🇮🇷", name: "Iran", code: "IR" },
+  "RU": { flag: "🇷🇺", name: "Russia", code: "RU" },
+  "AZ": { flag: "🇦🇿", name: "Azerbaijan", code: "AZ" }
+};
+
+function getCountryFlag(code) {
+  if (!code || code === "") return "🌐";
+  var c = String(code).trim().toUpperCase();
+  if (COUNTRY_METADATA[c]) return COUNTRY_METADATA[c].flag;
+  if (c.length === 2 && /^[A-Z]{2}$/.test(c)) {
+    var c1 = 0x1F1E6 - 65 + c.charCodeAt(0);
+    var c2 = 0x1F1E6 - 65 + c.charCodeAt(1);
+    return String.fromCodePoint(c1, c2);
+  }
+  if (c.charAt(0) === "!") return "🚫";
+  return "🚩";
+}
+
+function getCountryName(code) {
+  if (!code || code === "") return "Worldwide";
+  var c = String(code).trim().toUpperCase();
+  if (COUNTRY_METADATA[c]) return COUNTRY_METADATA[c].name;
+  if (c.charAt(0) === "!") return "Excluding " + c.substring(1);
+  return c;
+}
+
+function isPresetExitLoc(spec) {
+  if (!spec || spec === "") return true;
+  if (spec === "DE,SE,NL" || spec === "!IR,AZ,RU") return true;
+  var upper = spec.trim().toUpperCase();
+  return !!COUNTRY_METADATA[upper];
+}
+
+function formatExitLocWithFlag(spec) {
+  if (!spec || spec.trim() === "") return "🌐 Worldwide";
   var s = spec.trim();
-  if (s.charAt(0) === "!") return "Excluding " + s.substring(1);
-  return "Only " + s;
+  if (s.charAt(0) === "!") {
+    var blocked = s.substring(1).split(",").map(function(item) {
+      var trimmed = item.trim().toUpperCase();
+      return getCountryFlag(trimmed) + " " + trimmed;
+    }).join(" ");
+    return "🚫 Blocked: " + (blocked || s.substring(1));
+  }
+  if (s.indexOf(",") !== -1) {
+    var allowed = s.split(",").map(function(item) {
+      var trimmed = item.trim().toUpperCase();
+      return getCountryFlag(trimmed) + " " + trimmed;
+    }).join(" ");
+    return allowed;
+  }
+  var upper = s.toUpperCase();
+  return getCountryFlag(upper) + " " + getCountryName(upper) + " (" + upper + ")";
+}
+
+function formatExitLoc(spec) {
+  return formatExitLocWithFlag(spec);
 }
 
 function formatStats(enabled, secs) {
