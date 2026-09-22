@@ -872,109 +872,86 @@ Panel {
         }
       }
 
-      // Exit Location Card with Country Flags
-      BorderSurface {
+      // Exit Location Selection Dropdown
+      Column {
         width: parent.width
-        radius: Style.cornerRadius
-        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
-        implicitHeight: exitLocCol.implicitHeight + Style.space(16)
+        spacing: Style.space(6)
 
+        RowLayout {
+          width: parent.width
+
+          Text {
+            text: "EXIT LOCATION"
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            color: root.dim
+            font.family: root.fontFamily
+          }
+
+          Item { Layout.fillWidth: true }
+
+          Button {
+            text: root.customExitExpanded ? "Close Custom" : "Custom…"
+            selected: root.customExitExpanded || (aether.exit_loc !== "" && !Model.isPresetExitLoc(aether.exit_loc))
+            onClicked: root.customExitExpanded = !root.customExitExpanded
+          }
+        }
+
+        Dropdown {
+          width: parent.width
+          showLabel: false
+          value: aether.exit_loc
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          options: {
+            var opts = [
+              { value: "", label: "🌐 Worldwide (Any)" },
+              { value: "DE,SE,NL", label: "🇪🇺 Safe EU (DE, SE, NL)" },
+              { value: "!IR,AZ,RU", label: "🚫 Non-Censored (!IR, AZ, RU)" },
+              { value: "US", label: "🇺🇸 United States (US)" },
+              { value: "DE", label: "🇩🇪 Germany (DE)" },
+              { value: "NL", label: "🇳🇱 Netherlands (NL)" },
+              { value: "SE", label: "🇸🇪 Sweden (SE)" },
+              { value: "GB", label: "🇬🇧 United Kingdom (GB)" },
+              { value: "CH", label: "🇨🇭 Switzerland (CH)" },
+              { value: "FR", label: "🇫🇷 France (FR)" },
+              { value: "CA", label: "🇨🇦 Canada (CA)" },
+              { value: "JP", label: "🇯🇵 Japan (JP)" },
+              { value: "SG", label: "🇸🇬 Singapore (SG)" },
+              { value: "FI", label: "🇫🇮 Finland (FI)" },
+              { value: "PL", label: "🇵🇱 Poland (PL)" },
+              { value: "AT", label: "🇦🇹 Austria (AT)" },
+              { value: "IT", label: "🇮🇹 Italy (IT)" },
+              { value: "ES", label: "🇪🇸 Spain (ES)" },
+              { value: "AU", label: "🇦🇺 Australia (AU)" }
+            ];
+            if (aether.exit_loc !== "" && !Model.isPresetExitLoc(aether.exit_loc)) {
+              opts.unshift({ value: aether.exit_loc, label: Model.formatExitLocWithFlag(aether.exit_loc) });
+            }
+            opts.push({ value: "custom", label: "✏️ Custom filter…" });
+            return opts;
+          }
+          onChanged: function(v) {
+            if (v === "custom") {
+              root.customExitExpanded = true;
+            } else {
+              root.customExitExpanded = false;
+              aether.setExitLoc(v);
+            }
+          }
+        }
+
+        // Collapsible Custom Text Field
         Column {
-          id: exitLocCol
-          width: parent.width - Style.space(20)
-          anchors.centerIn: parent
-          spacing: Style.space(8)
+          visible: root.customExitExpanded || (aether.exit_loc !== "" && !Model.isPresetExitLoc(aether.exit_loc))
+          width: parent.width
+          spacing: Style.space(4)
 
-          // Header with Current Selection Badge
-          RowLayout {
-            width: parent.width
-            Text {
-              text: "EXIT LOCATION"
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              color: root.dim
-              font.family: root.fontFamily
-            }
-            Item { Layout.fillWidth: true }
-            Text {
-              text: Model.formatExitLocWithFlag(aether.exit_loc)
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              color: aether.exit_loc !== "" ? root.accent : root.foreground
-              font.family: root.fontFamily
-              elide: Text.ElideRight
-            }
-          }
-
-          // Country Flag Grid (4 columns x 3 rows = 12 locations)
-          GridLayout {
-            width: parent.width
-            columns: 4
-            columnSpacing: Style.space(4)
-            rowSpacing: Style.space(4)
-
-            Repeater {
-              model: [
-                { code: "", label: "Worldwide", flag: "🌐" },
-                { code: "US", label: "US", flag: "🇺🇸" },
-                { code: "DE", label: "DE", flag: "🇩🇪" },
-                { code: "NL", label: "NL", flag: "🇳🇱" },
-                { code: "SE", label: "SE", flag: "🇸🇪" },
-                { code: "GB", label: "GB", flag: "🇬🇧" },
-                { code: "CH", label: "CH", flag: "🇨🇭" },
-                { code: "FR", label: "FR", flag: "🇫🇷" },
-                { code: "JP", label: "JP", flag: "🇯🇵" },
-                { code: "SG", label: "SG", flag: "🇸🇬" },
-                { code: "CA", label: "CA", flag: "🇨🇦" },
-                { code: "FI", label: "FI", flag: "🇫🇮" }
-              ]
-
-              Button {
-                Layout.fillWidth: true
-                text: modelData.flag + " " + (modelData.code === "" ? "Any" : modelData.code)
-                selected: aether.exit_loc === modelData.code
-                onClicked: aether.setExitLoc(modelData.code)
-              }
-            }
-          }
-
-          // Quick Filter Presets & Custom Toggle
-          RowLayout {
-            width: parent.width
-            spacing: Style.space(4)
-
-            Button {
-              Layout.fillWidth: true
-              text: "🇪🇺 Safe EU"
-              selected: aether.exit_loc === "DE,SE,NL"
-              onClicked: aether.setExitLoc("DE,SE,NL")
-            }
-
-            Button {
-              Layout.fillWidth: true
-              text: "🚫 Non-Censored"
-              selected: aether.exit_loc === "!IR,AZ,RU"
-              onClicked: aether.setExitLoc("!IR,AZ,RU")
-            }
-
-            Button {
-              text: root.customExitExpanded ? "Close" : "Custom…"
-              selected: root.customExitExpanded || (aether.exit_loc !== "" && !Model.isPresetExitLoc(aether.exit_loc))
-              onClicked: root.customExitExpanded = !root.customExitExpanded
-            }
-          }
-
-          // Collapsible Custom Text Field
-          Column {
-            visible: root.customExitExpanded || (aether.exit_loc !== "" && !Model.isPresetExitLoc(aether.exit_loc))
-            width: parent.width
-            spacing: Style.space(4)
-
-            AetherField {
-              key: "exit_loc"
-              labelText: "Custom Filter (e.g. DE,FR or !IR,RU)"
-              hintText: "Refuses any gateway not matching these country codes"
-            }
+          AetherField {
+            key: "exit_loc"
+            labelText: "Custom Filter (e.g. DE,FR or !IR,RU)"
+            hintText: "Refuses any gateway not matching these country codes"
           }
         }
       }
