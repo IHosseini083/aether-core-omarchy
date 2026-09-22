@@ -8,6 +8,9 @@ var activePhrases = [
   "Protecting packets",
   "Stealth encrypted stream",
   "Circumventing filters",
+  "Tunneling via Psiphon",
+  "Multi-hop onion routing",
+  "Guarding exit location",
   "Securing connections"
 ];
 
@@ -17,7 +20,7 @@ function getHeroPhrase(index) {
 
 function parseStatus(rawJson) {
   var defaultState = {
-    plugin_version: "1.7.0",
+    plugin_version: "1.8.0",
     installed: false,
     binary: "",
     binary_version: "",
@@ -71,12 +74,27 @@ function parseStatus(rawJson) {
     tls_groups: "",
     routes_file: "",
     tor_bind: "",
+    tor_http: "",
     tor_dir: "",
     tor_bridges: "",
     tor_bridge: "",
+    tor_bridge_file: "",
+    tor_relays: "",
+    tor_relay_ports: "",
     tor_pt: "",
     tor_pt_dir: "",
     tor_country: "",
+    psiphon_mode: "auto",
+    psiphon_region: "",
+    psiphon_bind: "",
+    psiphon_http: "",
+    psiphon_config: "",
+    psiphon_cdn_ips: "",
+    psiphon_cdn_sni: "",
+    exit_loc: "",
+    exit_loc_secs: "",
+    stats_enabled: false,
+    stats_secs: "",
     access_id: "",
     access_secret: "",
     access_token: "",
@@ -177,12 +195,27 @@ function parseStatus(rawJson) {
       tls_groups: String(parsed.tls_groups || ""),
       routes_file: String(parsed.routes_file || ""),
       tor_bind: String(parsed.tor_bind || ""),
+      tor_http: String(parsed.tor_http || ""),
       tor_dir: String(parsed.tor_dir || ""),
       tor_bridges: String(parsed.tor_bridges || ""),
       tor_bridge: String(parsed.tor_bridge || ""),
+      tor_bridge_file: String(parsed.tor_bridge_file || ""),
+      tor_relays: String(parsed.tor_relays || ""),
+      tor_relay_ports: String(parsed.tor_relay_ports || ""),
       tor_pt: String(parsed.tor_pt || ""),
       tor_pt_dir: String(parsed.tor_pt_dir || ""),
       tor_country: String(parsed.tor_country || ""),
+      psiphon_mode: String(parsed.psiphon_mode || "auto"),
+      psiphon_region: String(parsed.psiphon_region || ""),
+      psiphon_bind: String(parsed.psiphon_bind || ""),
+      psiphon_http: String(parsed.psiphon_http || ""),
+      psiphon_config: String(parsed.psiphon_config || ""),
+      psiphon_cdn_ips: String(parsed.psiphon_cdn_ips || ""),
+      psiphon_cdn_sni: String(parsed.psiphon_cdn_sni || ""),
+      exit_loc: String(parsed.exit_loc || ""),
+      exit_loc_secs: String(parsed.exit_loc_secs || ""),
+      stats_enabled: parsed.stats_enabled === true,
+      stats_secs: String(parsed.stats_secs || ""),
       access_id: String(parsed.access_id || ""),
       access_secret: String(parsed.access_secret || ""),
       access_token: String(parsed.access_token || ""),
@@ -247,6 +280,72 @@ function httpProxyUrl(port) {
   return "http://127.0.0.1:" + port;
 }
 
+function torProxyUrl(bind) {
+  if (!bind) return "socks5h://127.0.0.1:1820";
+  return bind.indexOf("://") !== -1 ? bind : "socks5h://" + bind;
+}
+
+function torHttpProxyUrl(bind) {
+  if (!bind) return "";
+  return bind.indexOf("://") !== -1 ? bind : "http://" + bind;
+}
+
+function psiphonProxyUrl(bind) {
+  if (!bind) return "socks5h://127.0.0.1:1821";
+  return bind.indexOf("://") !== -1 ? bind : "socks5h://" + bind;
+}
+
+function psiphonHttpProxyUrl(bind) {
+  if (!bind) return "";
+  return bind.indexOf("://") !== -1 ? bind : "http://" + bind;
+}
+
+function isTor(proto) {
+  return proto === "tor" || proto === "tor-reverse" || proto === "tor-only";
+}
+
+function isPsiphon(proto) {
+  return proto === "psiphon" || proto === "psiphon-reverse" || proto === "psiphon-only";
+}
+
+function protocolCategory(proto) {
+  if (isTor(proto)) return "tor";
+  if (isPsiphon(proto)) return "psiphon";
+  if (proto === "wg") return "wg";
+  if (proto === "gool") return "gool";
+  if (proto === "mim") return "mim";
+  return "masque";
+}
+
+function protocolLabel(proto, h2) {
+  switch (proto) {
+    case "masque": return h2 ? "MASQUE (HTTP/2)" : "MASQUE (QUIC)";
+    case "wg": return "WireGuard";
+    case "gool": return "WARP-in-WARP";
+    case "mim": return h2 ? "MIM (HTTP/2)" : "MIM (QUIC)";
+    case "tor": return "WARP → Tor";
+    case "tor-reverse": return "Tor → WARP";
+    case "tor-only": return "Standalone Tor";
+    case "psiphon": return "WARP → Psiphon";
+    case "psiphon-reverse": return "Psiphon → WARP";
+    case "psiphon-only": return "Standalone Psiphon";
+    default: return proto || "MASQUE";
+  }
+}
+
+function formatExitLoc(spec) {
+  if (!spec || spec.trim() === "") return "Worldwide";
+  var s = spec.trim();
+  if (s.charAt(0) === "!") return "Excluding " + s.substring(1);
+  return "Only " + s;
+}
+
+function formatStats(enabled, secs) {
+  if (!enabled) return "Off";
+  var s = secs ? parseInt(secs, 10) : 60;
+  return "Every " + (s || 60) + "s";
+}
+
 function exportEnv(port) {
   var u = socksUrl(port);
   return "export all_proxy=" + u + " http_proxy=" + u + " https_proxy=" + u;
@@ -302,13 +401,13 @@ function colorizeLogsToHtml(rawText, accentHex, urgentHex) {
     var esc = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     var col = "#c0caf5";
 
-    if (/error|failed|fatal|abort|cannot|denied/i.test(line)) {
+    if (/error|failed|fatal|abort|cannot|denied|refused/i.test(line)) {
       col = urgent;
-    } else if (/warn|warning|retry|dropping|cooldown/i.test(line)) {
+    } else if (/warn|warning|retry|dropping|cooldown|stall/i.test(line)) {
       col = warnCol;
-    } else if (/connected|warp=on|success|accepted|handshake complete|listening/i.test(line)) {
+    } else if (/connected|warp=on|success|accepted|handshake complete|listening|tunnel open|psiphon.*tunnel connected|bootstrapped 100%/i.test(line)) {
       col = accent;
-    } else if (/^\[plugin\]|launching/i.test(line)) {
+    } else if (/^\[plugin\]|launching|psiphon|tor|exit-loc|stats|bytes up|bytes down/i.test(line)) {
       col = infoCol;
     } else if (/^\[\d{4}-\d{2}-\d{2}/.test(line)) {
       col = grayCol;

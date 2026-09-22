@@ -76,6 +76,21 @@ DEFAULT_TOR_BRIDGE=""
 DEFAULT_TOR_PT=""
 DEFAULT_TOR_PT_DIR=""
 DEFAULT_TOR_COUNTRY=""
+DEFAULT_TOR_RELAYS=""
+DEFAULT_TOR_RELAY_PORTS=""
+DEFAULT_TOR_BRIDGE_FILE=""
+DEFAULT_TOR_HTTP=""
+DEFAULT_PSIPHON_MODE="auto"
+DEFAULT_PSIPHON_REGION=""
+DEFAULT_PSIPHON_BIND=""
+DEFAULT_PSIPHON_HTTP=""
+DEFAULT_PSIPHON_CONFIG=""
+DEFAULT_PSIPHON_CDN_IPS=""
+DEFAULT_PSIPHON_CDN_SNI=""
+DEFAULT_EXIT_LOC=""
+DEFAULT_EXIT_LOC_SECS=""
+DEFAULT_STATS=0
+DEFAULT_STATS_SECS=""
 DEFAULT_ACCESS_ID=""
 DEFAULT_ACCESS_SECRET=""
 DEFAULT_ACCESS_EMAIL=""
@@ -155,6 +170,21 @@ load_config() {
   TOR_PT="${AETHER_CFG_TOR_PT:-$DEFAULT_TOR_PT}"
   TOR_PT_DIR="${AETHER_CFG_TOR_PT_DIR:-$DEFAULT_TOR_PT_DIR}"
   TOR_COUNTRY="${AETHER_CFG_TOR_COUNTRY:-$DEFAULT_TOR_COUNTRY}"
+  TOR_RELAYS="${AETHER_CFG_TOR_RELAYS:-$DEFAULT_TOR_RELAYS}"
+  TOR_RELAY_PORTS="${AETHER_CFG_TOR_RELAY_PORTS:-$DEFAULT_TOR_RELAY_PORTS}"
+  TOR_BRIDGE_FILE="${AETHER_CFG_TOR_BRIDGE_FILE:-$DEFAULT_TOR_BRIDGE_FILE}"
+  TOR_HTTP="${AETHER_CFG_TOR_HTTP:-$DEFAULT_TOR_HTTP}"
+  PSIPHON_MODE="${AETHER_CFG_PSIPHON_MODE:-$DEFAULT_PSIPHON_MODE}"
+  PSIPHON_REGION="${AETHER_CFG_PSIPHON_REGION:-$DEFAULT_PSIPHON_REGION}"
+  PSIPHON_BIND="${AETHER_CFG_PSIPHON_BIND:-$DEFAULT_PSIPHON_BIND}"
+  PSIPHON_HTTP="${AETHER_CFG_PSIPHON_HTTP:-$DEFAULT_PSIPHON_HTTP}"
+  PSIPHON_CONFIG="${AETHER_CFG_PSIPHON_CONFIG:-$DEFAULT_PSIPHON_CONFIG}"
+  PSIPHON_CDN_IPS="${AETHER_CFG_PSIPHON_CDN_IPS:-$DEFAULT_PSIPHON_CDN_IPS}"
+  PSIPHON_CDN_SNI="${AETHER_CFG_PSIPHON_CDN_SNI:-$DEFAULT_PSIPHON_CDN_SNI}"
+  EXIT_LOC="${AETHER_CFG_EXIT_LOC:-$DEFAULT_EXIT_LOC}"
+  EXIT_LOC_SECS="${AETHER_CFG_EXIT_LOC_SECS:-$DEFAULT_EXIT_LOC_SECS}"
+  STATS="${AETHER_CFG_STATS:-$DEFAULT_STATS}"
+  STATS_SECS="${AETHER_CFG_STATS_SECS:-$DEFAULT_STATS_SECS}"
   ACCESS_ID="${AETHER_CFG_ACCESS_ID:-$DEFAULT_ACCESS_ID}"
   ACCESS_SECRET="${AETHER_CFG_ACCESS_SECRET:-$DEFAULT_ACCESS_SECRET}"
   ACCESS_EMAIL="${AETHER_CFG_ACCESS_EMAIL:-$DEFAULT_ACCESS_EMAIL}"
@@ -239,6 +269,21 @@ save_config() {
     printf 'AETHER_CFG_TOR_PT=%q\n' "$TOR_PT"
     printf 'AETHER_CFG_TOR_PT_DIR=%q\n' "$TOR_PT_DIR"
     printf 'AETHER_CFG_TOR_COUNTRY=%q\n' "$TOR_COUNTRY"
+    printf 'AETHER_CFG_TOR_RELAYS=%q\n' "$TOR_RELAYS"
+    printf 'AETHER_CFG_TOR_RELAY_PORTS=%q\n' "$TOR_RELAY_PORTS"
+    printf 'AETHER_CFG_TOR_BRIDGE_FILE=%q\n' "$TOR_BRIDGE_FILE"
+    printf 'AETHER_CFG_TOR_HTTP=%q\n' "$TOR_HTTP"
+    printf 'AETHER_CFG_PSIPHON_MODE=%q\n' "$PSIPHON_MODE"
+    printf 'AETHER_CFG_PSIPHON_REGION=%q\n' "$PSIPHON_REGION"
+    printf 'AETHER_CFG_PSIPHON_BIND=%q\n' "$PSIPHON_BIND"
+    printf 'AETHER_CFG_PSIPHON_HTTP=%q\n' "$PSIPHON_HTTP"
+    printf 'AETHER_CFG_PSIPHON_CONFIG=%q\n' "$PSIPHON_CONFIG"
+    printf 'AETHER_CFG_PSIPHON_CDN_IPS=%q\n' "$PSIPHON_CDN_IPS"
+    printf 'AETHER_CFG_PSIPHON_CDN_SNI=%q\n' "$PSIPHON_CDN_SNI"
+    printf 'AETHER_CFG_EXIT_LOC=%q\n' "$EXIT_LOC"
+    printf 'AETHER_CFG_EXIT_LOC_SECS=%q\n' "$EXIT_LOC_SECS"
+    printf 'AETHER_CFG_STATS=%q\n' "$STATS"
+    printf 'AETHER_CFG_STATS_SECS=%q\n' "$STATS_SECS"
     printf 'AETHER_CFG_ACCESS_ID=%q\n' "$ACCESS_ID"
     printf 'AETHER_CFG_ACCESS_SECRET=%q\n' "$ACCESS_SECRET"
     printf 'AETHER_CFG_ACCESS_EMAIL=%q\n' "$ACCESS_EMAIL"
@@ -460,7 +505,7 @@ is_aether_pid() {
   if [[ -n "$rec_bin" ]]; then
     [[ "$cmdline" == *"$rec_bin"* ]] && return 0
   fi
-  [[ "$cmdline" == *"aether"* && "$cmdline" =~ (--masque|--wg|--gool|--mim|--tor) ]]
+  [[ "$cmdline" == *"aether"* && "$cmdline" =~ (--masque|--wg|--gool|--mim|--tor|--psiphon) ]]
 }
 
 get_running_pid() {
@@ -475,7 +520,7 @@ get_running_pid() {
   fi
 
   local pids
-  pids=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  pids=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor|--psiphon)" 2>/dev/null || true)
   if [[ -n "$pids" ]]; then
     local p
     while IFS= read -r p; do
@@ -1379,6 +1424,15 @@ build_args() {
     tor-only)
       args+=("--tor-only")
       ;;
+    psiphon)
+      args+=("--masque" "--psiphon")
+      ;;
+    psiphon-reverse)
+      args+=("--psiphon-reverse")
+      ;;
+    psiphon-only)
+      args+=("--psiphon-only")
+      ;;
     *)
       args+=("--masque")
       ;;
@@ -1455,6 +1509,9 @@ build_args() {
     if [[ -n "$TOR_BIND" ]]; then
       args+=("--tor-bind" "$TOR_BIND")
     fi
+    if [[ -n "$TOR_HTTP" ]]; then
+      args+=("--tor-http" "$TOR_HTTP")
+    fi
     if [[ -n "$TOR_DIR" ]]; then
       args+=("--tor-dir" "$TOR_DIR")
     fi
@@ -1466,11 +1523,61 @@ build_args() {
     if [[ -n "$TOR_BRIDGE" ]]; then
       args+=("--tor-bridge" "$TOR_BRIDGE")
     fi
+    if [[ -n "$TOR_BRIDGE_FILE" ]]; then
+      args+=("--tor-bridge-file" "$TOR_BRIDGE_FILE")
+    fi
+    if [[ -n "$TOR_RELAYS" ]]; then
+      args+=("--tor-relays" "$TOR_RELAYS")
+    fi
+    if [[ -n "$TOR_RELAY_PORTS" ]]; then
+      args+=("--tor-relay-ports" "$TOR_RELAY_PORTS")
+    fi
     if [[ -n "$TOR_PT" ]]; then
       args+=("--tor-pt" "$TOR_PT")
     fi
     if [[ -n "$TOR_PT_DIR" ]]; then
       args+=("--tor-pt-dir" "$TOR_PT_DIR")
+    fi
+  fi
+
+  # Psiphon extras
+  if [[ "$PROTOCOL" == psiphon* ]]; then
+    if [[ -n "$PSIPHON_MODE" ]]; then
+      args+=("--psiphon-mode" "$PSIPHON_MODE")
+    fi
+    if [[ -n "$PSIPHON_REGION" ]]; then
+      args+=("--psiphon-region" "$PSIPHON_REGION")
+    fi
+    if [[ -n "$PSIPHON_BIND" ]]; then
+      args+=("--psiphon-bind" "$PSIPHON_BIND")
+    fi
+    if [[ -n "$PSIPHON_HTTP" ]]; then
+      args+=("--psiphon-http" "$PSIPHON_HTTP")
+    fi
+    if [[ -n "$PSIPHON_CONFIG" ]]; then
+      args+=("--psiphon-config" "$PSIPHON_CONFIG")
+    fi
+    if [[ -n "$PSIPHON_CDN_IPS" ]]; then
+      args+=("--psiphon-cdn-ips" "$PSIPHON_CDN_IPS")
+    fi
+    if [[ -n "$PSIPHON_CDN_SNI" ]]; then
+      args+=("--psiphon-cdn-sni" "$PSIPHON_CDN_SNI")
+    fi
+  fi
+
+  # Exit location restriction (Aether v2.1.0)
+  if [[ -n "$EXIT_LOC" ]]; then
+    args+=("--exit-loc" "$EXIT_LOC")
+    if [[ -n "$EXIT_LOC_SECS" ]]; then
+      args+=("--exit-loc-secs" "$EXIT_LOC_SECS")
+    fi
+  fi
+
+  # Traffic stats logging (Aether v2.1.0)
+  if [[ "$STATS" == "1" ]]; then
+    args+=("--stats")
+    if [[ -n "$STATS_SECS" ]]; then
+      args+=("--stats-secs" "$STATS_SECS")
     fi
   fi
 
@@ -1662,12 +1769,27 @@ cmd_status() {
   "tls_groups": $(json_str "$TLS_GROUPS"),
   "routes_file": $(json_str "$ROUTES_FILE"),
   "tor_bind": $(json_str "$TOR_BIND"),
+  "tor_http": $(json_str "$TOR_HTTP"),
   "tor_dir": $(json_str "$TOR_DIR"),
   "tor_bridges": $(json_str "$TOR_BRIDGES"),
   "tor_bridge": $(json_str "$TOR_BRIDGE"),
+  "tor_bridge_file": $(json_str "$TOR_BRIDGE_FILE"),
+  "tor_relays": $(json_str "$TOR_RELAYS"),
+  "tor_relay_ports": $(json_str "$TOR_RELAY_PORTS"),
   "tor_pt": $(json_str "$TOR_PT"),
   "tor_pt_dir": $(json_str "$TOR_PT_DIR"),
   "tor_country": $(json_str "$TOR_COUNTRY"),
+  "psiphon_mode": $(json_str "$PSIPHON_MODE"),
+  "psiphon_region": $(json_str "$PSIPHON_REGION"),
+  "psiphon_bind": $(json_str "$PSIPHON_BIND"),
+  "psiphon_http": $(json_str "$PSIPHON_HTTP"),
+  "psiphon_config": $(json_str "$PSIPHON_CONFIG"),
+  "psiphon_cdn_ips": $(json_str "$PSIPHON_CDN_IPS"),
+  "psiphon_cdn_sni": $(json_str "$PSIPHON_CDN_SNI"),
+  "exit_loc": $(json_str "$EXIT_LOC"),
+  "exit_loc_secs": $(json_str "$EXIT_LOC_SECS"),
+  "stats_enabled": $( [[ "$STATS" == "1" ]] && echo "true" || echo "false" ),
+  "stats_secs": $(json_str "$STATS_SECS"),
   "access_id": $(json_str "$ACCESS_ID"),
   "access_secret": $(json_str "$ACCESS_SECRET"),
   "access_email": $(json_str "$ACCESS_EMAIL"),
@@ -1800,7 +1922,7 @@ cmd_stop() {
   # Intentional: also reap stray aether processes started outside the plugin
   # (e.g. leftover from a manual terminal run) so they don't fight the panel.
   local rogue
-  rogue=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor)" 2>/dev/null || true)
+  rogue=$(pgrep -f "aether.*(--masque|--wg|--gool|--mim|--tor|--psiphon)" 2>/dev/null || true)
   if [[ -n "$rogue" ]]; then
     kill -KILL "$rogue" 2>/dev/null || true
   fi
@@ -1848,25 +1970,25 @@ cmd_foreground() {  local bin
 # or compromised upstream release cannot silently replace the reviewed core.
 # To upgrade: bump AETHER_CORE_VERSION, re-download the new assets, and
 # replace the hashes with the values from the release's *.sha256 sidecars.
-AETHER_CORE_VERSION="v2.0.0"
+AETHER_CORE_VERSION="v2.1.0"
 # Pinned archives are ~15 MiB; the cap rejects truncated or padded responses.
 AETHER_CORE_MAX_BYTES=$((64 * 1024 * 1024))
 
 core_expected_sha256() {
   case "$1" in
-    aether-linux-x86_64.tar.gz) echo "504d561222280eea76a7187d5a3df7fd69284c784c02762ef31fd5d9b2904a6d" ;;
-    aether-linux-arm64.tar.gz)  echo "3d37a6e450fd67f85ad1c327c6c9b2bbc2ea4713a73c302c63c9e6936071ec70" ;;
-    aether-linux-armv7.tar.gz)  echo "67a2238342c6541821489a2544c351a68abf4222f1d402eeb84890bf914b965b" ;;
+    aether-linux-x86_64.tar.gz) echo "9d48d83cc6cd1900697636f282b57b530be67f372ddb6ac5056d91475e47b333" ;;
+    aether-linux-arm64.tar.gz)  echo "93bdf51f905884b26abe0b19406039758e776fcfefd74240c5689573506fd911" ;;
+    aether-linux-armv7.tar.gz)  echo "29fe77b02fafaa61df20d225615ace4cc8af92c8aad14734c5f495d33211dcea" ;;
     *) return 1 ;;
   esac
 }
 
-# Extract a checksum-verified core archive into dest. Only the three members
+# Extract a checksum-verified core archive into dest. Only the four members
 # of the pinned upstream tarball are accepted; anything else (absolute paths,
 # "..", links, unexpected files) aborts before anything is extracted.
 extract_core_archive() {
   local archive="$1" dest="$2"
-  local expected_members=$'aether\npt/\npt/lyrebird'
+  local expected_members=$'aether\npt/\npt/lyrebird\npt/psiphon-tunnel-core'
   local members entry line type_char
 
   if ! members=$(tar -tzf "$archive"); then
@@ -1879,7 +2001,7 @@ extract_core_archive() {
     return 1
   fi
 
-  for entry in aether pt/ pt/lyrebird; do
+  for entry in aether pt/ pt/lyrebird pt/psiphon-tunnel-core; do
     # First character of `tar -tv` output is the type: '-' regular, 'd' dir,
     # 'l' symlink, 'h' hardlink.
     if ! line=$(tar -tvzf "$archive" "$entry"); then
@@ -1896,7 +2018,7 @@ extract_core_archive() {
   # Every member is now verified, so extracting the archive can no longer
   # pull in anything outside the pinned member list above.
   tar -xzf "$archive" -C "$dest" --no-same-owner --no-same-permissions
-  chmod 0755 "$dest/aether" "$dest/pt" "$dest/pt/lyrebird"
+  chmod 0755 "$dest/aether" "$dest/pt" "$dest/pt/lyrebird" "$dest/pt/psiphon-tunnel-core"
 }
 
 cmd_install() {
@@ -2239,6 +2361,35 @@ cmd_set_config() {
     tor_pt) TOR_PT="$val" ;;
     tor_pt_dir) TOR_PT_DIR="$val" ;;
     tor_country) TOR_COUNTRY="$val" ;;
+    tor_relays) TOR_RELAYS="$val" ;;
+    tor_relay_ports)
+      case "$val" in
+        web|any|"") TOR_RELAY_PORTS="$val" ;;
+        *) echo "Error: tor_relay_ports must be web or any." >&2; return 1 ;;
+      esac ;;
+    tor_bridge_file) TOR_BRIDGE_FILE="$val" ;;
+    tor_http) TOR_HTTP="$val" ;;
+    psiphon_mode)
+      case "$val" in
+        auto|cdn|direct) PSIPHON_MODE="$val" ;;
+        *) echo "Error: psiphon_mode must be auto, cdn, or direct." >&2; return 1 ;;
+      esac ;;
+    psiphon_region) PSIPHON_REGION="$val" ;;
+    psiphon_bind) PSIPHON_BIND="$val" ;;
+    psiphon_http) PSIPHON_HTTP="$val" ;;
+    psiphon_config) PSIPHON_CONFIG="$val" ;;
+    psiphon_cdn_ips) PSIPHON_CDN_IPS="$val" ;;
+    psiphon_cdn_sni) PSIPHON_CDN_SNI="$val" ;;
+    exit_loc) EXIT_LOC="$val" ;;
+    exit_loc_secs)
+      [[ -z "$val" || "$val" =~ ^[0-9]+$ ]] || { echo "Error: exit_loc_secs must be an integer." >&2; return 1; }
+      EXIT_LOC_SECS="$val" ;;
+    stats)
+      [[ "$val" == "0" || "$val" == "1" ]] || { echo "Error: stats must be 0 or 1." >&2; return 1; }
+      STATS="$val" ;;
+    stats_secs)
+      [[ -z "$val" || "$val" =~ ^[0-9]+$ ]] || { echo "Error: stats_secs must be an integer." >&2; return 1; }
+      STATS_SECS="$val" ;;
     access_id) ACCESS_ID="$val" ;;
     access_secret) ACCESS_SECRET="$val" ;;
     access_email) ACCESS_EMAIL="$val" ;;
@@ -2377,7 +2528,7 @@ cmd_set_protocol() {
   local h2="${2:-0}"
 
   case "$proto" in
-    masque|wg|gool|mim) ;;
+    masque|wg|gool|mim|tor|tor-reverse|tor-only|psiphon|psiphon-reverse|psiphon-only) ;;
     *) echo "Unknown protocol: $proto" >&2; return 1 ;;
   esac
 

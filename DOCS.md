@@ -50,9 +50,9 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 
 | Key | Values (default first) | Flag passed to core | In panel UI |
 | --- | --- | --- | --- |
-| `protocol` | `masque`, `wg`, `gool`, `mim`, `tor`, `tor-reverse`, `tor-only` | `--masque` / `--wg` / `--gool` / `--mim` / `--tor` / `--tor-reverse` / `--tor-only` | ✓ Transport + Tor mode |
+| `protocol` | `masque`, `wg`, `gool`, `mim`, `tor`, `tor-reverse`, `tor-only`, `psiphon`, `psiphon-reverse`, `psiphon-only` | `--masque` / `--wg` / `--gool` / `--mim` / `--tor` / `--tor-reverse` / `--tor-only` / `--psiphon` / `--psiphon-reverse` / `--psiphon-only` | ✓ Transport + Tor + Psiphon |
 | `h2` | `0` (HTTP/3), `1` (HTTP/2) | `--h2` | ✓ Transport |
-| `scan` | `balanced`, `turbo`, `thorough`, `stealth`, `ironclad` | `--scan <mode>` | ✓ Scan mode |
+| `scan` | `balanced`, `turbo`, `verified`, `thorough`, `ironclad` | `--scan <mode>` | ✓ Scan mode |
 | `noize` | `firewall`, `gfw`, `aggressive`, `balanced`, `light`, `off` | `--noize <profile>` | ✓ Noize |
 | `ip` | `v4`, `v6`, `dual` | `-4` / `-6` / `--dual` | ✓ IP version |
 | `socks_port` | `1819` | `--bind 127.0.0.1:<port>` | ✓ Advanced |
@@ -81,10 +81,25 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `access_email` | empty | `--access-email <addr>` | ✓ Advanced |
 | `gateway` | `0`, `1` | `--gateway` (with `team`) | ✓ Advanced |
 | `tor_bind` / `tor_dir` | empty | `--tor-bind` / `--tor-dir` | ✓ Advanced |
+| `tor_http` | empty | `--tor-http` | ✓ Advanced |
 | `tor_bridges` | empty (auto), `on`, `off` | `--tor-bridges` / `--no-tor-bridges` | ✓ Advanced |
 | `tor_bridge` | empty | `--tor-bridge <line>` | ✓ Advanced |
+| `tor_bridge_file` | empty | `--tor-bridge-file <path>` | ✓ Advanced |
+| `tor_relays` | empty (auto), `only`, `off` | `--tor-relays <what>` | ✓ Advanced + Tunnel |
+| `tor_relay_ports` | empty (web), `any` | `--tor-relay-ports <set>` | ✓ Advanced |
 | `tor_pt` / `tor_pt_dir` | empty | `--tor-pt` / `--tor-pt-dir` | ✓ Advanced |
 | `tor_country` | empty | — (env `AETHER_TOR_COUNTRY`) | ✓ Advanced |
+| `psiphon_mode` | `auto`, `cdn`, `direct` | `--psiphon-mode <shape>` | ✓ Advanced |
+| `psiphon_region` | empty | `--psiphon-region <cc>` | ✓ Advanced + Tunnel |
+| `psiphon_bind` | empty (`127.0.0.1:1821`) | `--psiphon-bind <addr>` | ✓ Advanced |
+| `psiphon_http` | empty | `--psiphon-http <addr>` | ✓ Advanced |
+| `psiphon_config` | empty | `--psiphon-config <path>` | ✓ Advanced |
+| `psiphon_cdn_ips` | empty | `--psiphon-cdn-ips <list>` | ✓ Advanced |
+| `psiphon_cdn_sni` | empty | `--psiphon-cdn-sni <list>` | ✓ Advanced |
+| `exit_loc` | empty | `--exit-loc <spec>` | ✓ Advanced + Tunnel |
+| `exit_loc_secs` | empty (60) | `--exit-loc-secs <n>` | ✓ Advanced |
+| `stats` | `0` (off), `1` | `--stats` | ✓ Advanced + Tunnel |
+| `stats_secs` | empty (60) | `--stats-secs <n>` | ✓ Advanced |
 | `validate_secs` / `startup_secs` / `reconnect_secs` | empty (core defaults) | `--validate-secs` / `--startup-secs` / `--reconnect-secs` | ✓ Advanced |
 | `perf` | empty (auto), `low`, `medium`, `high` | `--perf <profile>` | ✓ Advanced |
 | `tls_groups` | empty | `--tls-groups <list>` | ✓ Advanced |
@@ -125,7 +140,8 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 ```json
 {
-  "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.0.0",
+  "plugin_version": "1.8.0", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.1.0",
+  "core_pinned_version": "v2.1.0", "core_update_available": false,
   "has_cap_net_admin": false, "running": true, "pid": "1234", "connected": true,
   "ip": "104.28.x.x", "colo": "FRA", "loc": "IR", "warp": "on", "latency_ms": 1091,
   "proxy_port": 1819, "http_proxy_port": 0,
@@ -136,10 +152,14 @@ All documented upstream flags now have a `set` key (see table above) except the 
   "dns": "", "team": "", "upstream": "", "route_direct": "", "route_block": "",
   "log_level": "info", "wg_peer": "", "h2_peer": "", "no_profile_retry": false,
   "validate_secs": "", "startup_secs": "", "reconnect_secs": "", "perf": "",
-  "tls_groups": "", "routes_file": "", "tor_bind": "", "tor_dir": "",
-  "tor_bridges": "", "tor_bridge": "", "tor_pt": "", "tor_pt_dir": "",
-  "tor_country": "", "access_id": "", "access_secret": "", "access_token": "",
-  "access_email": "", "discovered_cores": ["/path/to/aether"],
+  "tls_groups": "", "routes_file": "",
+  "tor_bind": "", "tor_http": "", "tor_dir": "", "tor_bridges": "", "tor_bridge": "",
+  "tor_bridge_file": "", "tor_relays": "", "tor_relay_ports": "", "tor_pt": "", "tor_pt_dir": "", "tor_country": "",
+  "psiphon_mode": "auto", "psiphon_region": "", "psiphon_bind": "", "psiphon_http": "",
+  "psiphon_config": "", "psiphon_cdn_ips": "", "psiphon_cdn_sni": "",
+  "exit_loc": "", "exit_loc_secs": "", "stats_enabled": false, "stats_secs": "",
+  "access_id": "", "access_secret": "", "access_token": "", "access_email": "",
+  "discovered_cores": ["/path/to/aether"],
   "zeptun_state": "DISABLED", "zeptun_available": true,
   "zeptun_binary": "/home/user/.local/share/omarchy-aether/bin/zeptun",
   "zeptun_pid": "", "zeptun_tun": "zeptun0", "zeptun_has_cap_net_admin": false,
@@ -157,7 +177,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
 }
 ```
 
-`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.0.0** flag set.
+`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.1.0** flag set.
 
 ### Core remove
 

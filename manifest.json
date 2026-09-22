@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "cluvex.aether",
   "name": "Aether",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "author": "iliya",
   "license": "MIT",
-  "description": "Omarchy bar controls for the Aether core (2.0.0): tunnel status, every CLI option, core management, polled logs, and optional system-wide TUN routing via Zeptun.",
+  "description": "Omarchy bar controls for the Aether core (2.1.0): Psiphon circumvention, Tor bridges & relays, exit location filtering, live stats, core management, polled logs, and optional system-wide TUN routing via Zeptun.",
   "kinds": [
     "bar-widget"
   ],

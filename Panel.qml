@@ -36,6 +36,10 @@ Panel {
     return (p === "tor" || p === "tor-reverse" || p === "tor-only") ? p : "off"
   }
 
+  function psiphonMode(p) {
+    return (p === "psiphon" || p === "psiphon-reverse" || p === "psiphon-only") ? p : "off"
+  }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -109,7 +113,7 @@ Panel {
     // +12: breathing room below the last row. fittedContentHeight adds the
     // card's padding/border insets on top; the column's 12px top margin is
     // separate, so total visible margin is 12 top / 12 bottom.
-    contentHeight: panel.fittedContentHeight(mainColumn.implicitHeight + Style.space(12), Style.space(currentTab === "controls" || currentTab === "logs" || currentTab === "routing" ? 760 : 660))
+    contentHeight: panel.fittedContentHeight(mainColumn.implicitHeight + Style.space(12), Style.space(currentTab === "controls" || currentTab === "logs" || currentTab === "routing" || currentTab === "advanced" ? 780 : 700))
 
     onOpenChanged: {
       if (open) {
@@ -521,6 +525,43 @@ Panel {
               font.family: root.fontFamily
             }
           }
+
+          Column {
+            Layout.fillWidth: true
+            Text {
+              text: "EXIT LOCATION GUARD"
+              font.pixelSize: Style.font.caption
+              color: root.dim
+              font.bold: true
+              font.family: root.fontFamily
+            }
+            Text {
+              text: Model.formatExitLoc(aether.exit_loc)
+              font.pixelSize: Style.font.body
+              font.bold: true
+              color: aether.exit_loc !== "" ? root.accent : root.foreground
+              font.family: root.fontFamily
+              elide: Text.ElideRight
+            }
+          }
+
+          Column {
+            Layout.fillWidth: true
+            Text {
+              text: "TRAFFIC STATS"
+              font.pixelSize: Style.font.caption
+              color: root.dim
+              font.bold: true
+              font.family: root.fontFamily
+            }
+            Text {
+              text: Model.formatStats(aether.stats_enabled, aether.stats_secs)
+              font.pixelSize: Style.font.body
+              font.bold: true
+              color: aether.stats_enabled ? root.accent : root.dim
+              font.family: root.fontFamily
+            }
+          }
         }
       }
 
@@ -528,13 +569,15 @@ Panel {
 
       // Transport Selection
       PanelSectionHeader {
-        text: "TRANSPORT"
+        text: "TRANSPORT PROTOCOL"
         foreground: root.foreground
       }
 
-      RowLayout {
+      GridLayout {
         width: parent.width
-        spacing: Style.space(4)
+        columns: 4
+        columnSpacing: Style.space(4)
+        rowSpacing: Style.space(4)
 
         Button {
           Layout.fillWidth: true
@@ -570,6 +613,299 @@ Panel {
           selected: aether.protocol === "mim"
           onClicked: aether.setConfig("protocol", "mim")
         }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Psiphon"
+          selected: Model.isPsiphon(aether.protocol)
+          onClicked: aether.setConfig("protocol", aether.protocol.indexOf("psiphon") === 0 ? aether.protocol : "psiphon")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Tor"
+          selected: Model.isTor(aether.protocol)
+          onClicked: aether.setConfig("protocol", aether.protocol.indexOf("tor") === 0 ? aether.protocol : "tor")
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: aether.stats_enabled ? "Stats: On" : "Stats: Off"
+          selected: aether.stats_enabled
+          onClicked: aether.toggleStats()
+        }
+      }
+
+      // Inline Psiphon Transport Options Card
+      BorderSurface {
+        visible: Model.isPsiphon(aether.protocol)
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.08)
+        borderSpec: Border.flat(root.accent, 1)
+        implicitHeight: psiphonSubCol.implicitHeight + Style.space(16)
+
+        Column {
+          id: psiphonSubCol
+          width: parent.width - Style.space(20)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          RowLayout {
+            width: parent.width
+            Text {
+              Layout.fillWidth: true
+              text: "PSIPHON ROUTING MODE"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.accent
+              font.family: root.fontFamily
+            }
+            Text {
+              text: "127.0.0.1:" + (aether.psiphon_bind !== "" ? aether.psiphon_bind.split(":").pop() : "1821")
+              font.pixelSize: Style.font.caption
+              color: root.dim
+              font.family: root.fontFamily
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Button {
+              Layout.fillWidth: true
+              text: "WARP → Psiphon"
+              selected: aether.protocol === "psiphon"
+              onClicked: aether.setConfig("protocol", "psiphon")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Psiphon → WARP"
+              selected: aether.protocol === "psiphon-reverse"
+              onClicked: aether.setConfig("protocol", "psiphon-reverse")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Psiphon Only"
+              selected: aether.protocol === "psiphon-only"
+              onClicked: aether.setConfig("protocol", "psiphon-only")
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Text {
+              text: "Region:"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.dim
+              font.family: root.fontFamily
+            }
+
+            Button {
+              text: "Auto"
+              selected: aether.psiphon_region === ""
+              onClicked: aether.setConfig("psiphon_region", "")
+            }
+            Button {
+              text: "DE"
+              selected: aether.psiphon_region === "DE"
+              onClicked: aether.setConfig("psiphon_region", "DE")
+            }
+            Button {
+              text: "US"
+              selected: aether.psiphon_region === "US"
+              onClicked: aether.setConfig("psiphon_region", "US")
+            }
+            Button {
+              text: "NL"
+              selected: aether.psiphon_region === "NL"
+              onClicked: aether.setConfig("psiphon_region", "NL")
+            }
+            Button {
+              text: "CH"
+              selected: aether.psiphon_region === "CH"
+              onClicked: aether.setConfig("psiphon_region", "CH")
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Button {
+              text: "Copy Proxy"
+              onClicked: aether.copyPsiphonSocksUrl()
+            }
+          }
+        }
+      }
+
+      // Inline Tor Transport Options Card
+      BorderSurface {
+        visible: Model.isTor(aether.protocol)
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.08)
+        borderSpec: Border.flat(root.accent, 1)
+        implicitHeight: torSubCol.implicitHeight + Style.space(16)
+
+        Column {
+          id: torSubCol
+          width: parent.width - Style.space(20)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          RowLayout {
+            width: parent.width
+            Text {
+              Layout.fillWidth: true
+              text: "TOR ROUTING MODE"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.accent
+              font.family: root.fontFamily
+            }
+            Text {
+              text: "127.0.0.1:" + (aether.tor_bind !== "" ? aether.tor_bind.split(":").pop() : "1820")
+              font.pixelSize: Style.font.caption
+              color: root.dim
+              font.family: root.fontFamily
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Button {
+              Layout.fillWidth: true
+              text: "WARP → Tor"
+              selected: aether.protocol === "tor"
+              onClicked: aether.setConfig("protocol", "tor")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Tor → WARP"
+              selected: aether.protocol === "tor-reverse"
+              onClicked: aether.setConfig("protocol", "tor-reverse")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "Tor Only"
+              selected: aether.protocol === "tor-only"
+              onClicked: aether.setConfig("protocol", "tor-only")
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Text {
+              text: "Relays:"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.dim
+              font.family: root.fontFamily
+            }
+
+            Button {
+              text: "Auto"
+              selected: aether.tor_relays === "" || aether.tor_relays === "auto"
+              onClicked: aether.setConfig("tor_relays", "auto")
+            }
+            Button {
+              text: "Only"
+              selected: aether.tor_relays === "only"
+              onClicked: aether.setConfig("tor_relays", "only")
+            }
+            Button {
+              text: "Off"
+              selected: aether.tor_relays === "off"
+              onClicked: aether.setConfig("tor_relays", "off")
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Button {
+              text: "Copy Proxy"
+              onClicked: aether.copyTorSocksUrl()
+            }
+          }
+        }
+      }
+
+      // Exit Location Guard Card
+      BorderSurface {
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
+        implicitHeight: exitLocCol.implicitHeight + Style.space(16)
+
+        Column {
+          id: exitLocCol
+          width: parent.width - Style.space(20)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          RowLayout {
+            width: parent.width
+            Text {
+              Layout.fillWidth: true
+              text: "EXIT LOCATION FILTER"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: aether.exit_loc !== "" ? root.accent : root.dim
+              font.family: root.fontFamily
+            }
+
+            Text {
+              text: Model.formatExitLoc(aether.exit_loc)
+              font.pixelSize: Style.font.caption
+              font.bold: aether.exit_loc !== ""
+              color: aether.exit_loc !== "" ? root.accent : root.dim
+              font.family: root.fontFamily
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Button {
+              Layout.fillWidth: true
+              text: "Worldwide"
+              selected: aether.exit_loc === ""
+              onClicked: aether.setExitLoc("")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "!IR,AZ,RU"
+              selected: aether.exit_loc === "!IR,AZ,RU"
+              onClicked: aether.setExitLoc("!IR,AZ,RU")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "DE,SE,NL"
+              selected: aether.exit_loc === "DE,SE,NL"
+              onClicked: aether.setExitLoc("DE,SE,NL")
+            }
+
+            Button {
+              Layout.fillWidth: true
+              text: "US"
+              selected: aether.exit_loc === "US"
+              onClicked: aether.setExitLoc("US")
+            }
+          }
+        }
       }
 
       // Scan Profile
@@ -578,10 +914,10 @@ Panel {
         label: "SCAN MODE"
         value: aether.scan
         options: [
-          { value: "balanced", label: "Balanced — collect a few, keep the fastest" },
+          { value: "balanced", label: "Balanced — collect a few, keep the fastest (default)" },
           { value: "turbo", label: "Turbo — first responder wins" },
+          { value: "verified", label: "Verified — measured connect-ip edges, split multi-hop" },
           { value: "thorough", label: "Thorough — sweep whole ranges" },
-          { value: "stealth", label: "Stealth — few probes in flight" },
           { value: "ironclad", label: "Ironclad — verify with real traffic" }
         ]
       }
@@ -1540,7 +1876,55 @@ Panel {
       }
 
       PanelSectionHeader {
-        text: "TOR"
+        text: "PSIPHON CIRCUMVENTION (V2.1)"
+        foreground: root.dim
+      }
+
+      Dropdown {
+        width: parent.width
+        label: "PSIPHON PROTOCOL MODE"
+        value: root.psiphonMode(aether.protocol)
+        foreground: root.foreground
+        accent: root.accent
+        fontFamily: root.fontFamily
+        options: [
+          { value: "off", label: "Disabled (use primary protocol)" },
+          { value: "psiphon", label: "WARP → Psiphon (carry Psiphon inside tunnel)" },
+          { value: "psiphon-reverse", label: "Psiphon → WARP (dial tunnel through Psiphon)" },
+          { value: "psiphon-only", label: "Psiphon only — standalone proxy without WARP" }
+        ]
+        onChanged: function(v) { aether.setConfig("protocol", v === "off" ? "masque" : v) }
+      }
+
+      AetherDropdown {
+        key: "psiphon_mode"
+        label: "PSIPHON TRANSPORT MODE"
+        value: aether.psiphon_mode
+        options: [
+          { value: "auto", label: "Auto — let Psiphon pick best egress" },
+          { value: "cdn", label: "CDN — fronted meek through CDN only (firewall bypass)" },
+          { value: "direct", label: "Direct — direct egress without CDN fronting" }
+        ]
+      }
+
+      AetherField { key: "psiphon_region"; labelText: "Psiphon egress country code (e.g. DE, US, NL, CH)" }
+
+      GridLayout {
+        width: parent.width
+        columns: 2
+        columnSpacing: Style.space(8)
+        rowSpacing: Style.space(8)
+
+        AetherField { Layout.fillWidth: true; key: "psiphon_bind"; labelText: "Psiphon SOCKS5 bind (default 127.0.0.1:1821)" }
+        AetherField { Layout.fillWidth: true; key: "psiphon_http"; labelText: "Psiphon HTTP proxy bind address" }
+        AetherField { Layout.fillWidth: true; key: "psiphon_cdn_ips"; labelText: "CDN fronting IP list (comma-separated)" }
+        AetherField { Layout.fillWidth: true; key: "psiphon_cdn_sni"; labelText: "CDN fronting SNI names" }
+      }
+
+      AetherField { key: "psiphon_config"; labelText: "Psiphon custom JSON config file (--psiphon-config)" }
+
+      PanelSectionHeader {
+        text: "TOR ONION NETWORK (V2.1)"
         foreground: root.dim
       }
 
@@ -1561,6 +1945,27 @@ Panel {
       }
 
       AetherDropdown {
+        key: "tor_relays"
+        label: "TOR ONIONOO RELAYS (V2.1)"
+        value: aether.tor_relays !== "" ? aether.tor_relays : "auto"
+        options: [
+          { value: "auto", label: "Auto — Onionoo relays alongside BridgeDB (recommended)" },
+          { value: "only", label: "Only — use Onionoo relays exclusively as bridges" },
+          { value: "off", label: "Off — BridgeDB bridges only" }
+        ]
+      }
+
+      AetherDropdown {
+        key: "tor_relay_ports"
+        label: "TOR RELAY PORTS"
+        value: aether.tor_relay_ports !== "" ? aether.tor_relay_ports : "web"
+        options: [
+          { value: "web", label: "Web ports only (80 and 443 — firewall stealth)" },
+          { value: "any", label: "Any ports — all running relay ports" }
+        ]
+      }
+
+      AetherDropdown {
         key: "tor_bridges"
         label: "TOR BRIDGES"
         value: aether.tor_bridges
@@ -1578,13 +1983,39 @@ Panel {
         rowSpacing: Style.space(8)
 
         AetherField { Layout.fillWidth: true; key: "tor_bind"; labelText: "Tor proxy bind address" }
+        AetherField { Layout.fillWidth: true; key: "tor_http"; labelText: "Tor HTTP proxy address (--tor-http)" }
         AetherField { Layout.fillWidth: true; key: "tor_country"; labelText: "Bridge country (e.g. ir)" }
+        AetherField { Layout.fillWidth: true; key: "tor_bridge_file"; labelText: "Tor bridge list file (--tor-bridge-file)" }
         AetherField { Layout.fillWidth: true; key: "tor_dir"; labelText: "Tor state directory" }
         AetherField { Layout.fillWidth: true; key: "tor_pt_dir"; labelText: "Transport search directory" }
       }
 
       AetherField { key: "tor_bridge"; labelText: "Custom bridge line (obfs4 1.2.3.4:443 …)" }
       AetherField { key: "tor_pt"; labelText: "Pluggable transport binary ([name=]/path)" }
+
+      PanelSectionHeader {
+        text: "EXIT LOCATION & TRAFFIC STATS (V2.1)"
+        foreground: root.dim
+      }
+
+      GridLayout {
+        width: parent.width
+        columns: 2
+        columnSpacing: Style.space(8)
+        rowSpacing: Style.space(8)
+
+        AetherField { Layout.fillWidth: true; key: "exit_loc"; labelText: "Exit country filter (!IR,AZ,RU or DE,SE)" }
+        AetherField { Layout.fillWidth: true; key: "exit_loc_secs"; labelText: "Exit check interval (s, default 60)" }
+        AetherField { Layout.fillWidth: true; key: "stats_secs"; labelText: "Traffic stats interval (s, default 60)" }
+      }
+
+      Toggle {
+        width: parent.width
+        label: "Log Traffic Statistics (--stats)"
+        description: "Periodically log bandwidth upload/download totals and tunnel uptime"
+        checked: aether.stats_enabled
+        onClicked: aether.toggleStats()
+      }
 
       PanelSectionHeader {
         text: "TIMING, TLS & LOGGING"

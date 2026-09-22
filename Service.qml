@@ -8,7 +8,7 @@ Item {
   id: root
 
   // Core status
-  property string pluginVersion: "1.7.0"
+  property string pluginVersion: "1.8.0"
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""
@@ -69,12 +69,27 @@ Item {
   property string tls_groups: ""
   property string routes_file: ""
   property string tor_bind: ""
+  property string tor_http: ""
   property string tor_dir: ""
   property string tor_bridges: ""
   property string tor_bridge: ""
+  property string tor_bridge_file: ""
+  property string tor_relays: ""
+  property string tor_relay_ports: ""
   property string tor_pt: ""
   property string tor_pt_dir: ""
   property string tor_country: ""
+  property string psiphon_mode: "auto"
+  property string psiphon_region: ""
+  property string psiphon_bind: ""
+  property string psiphon_http: ""
+  property string psiphon_config: ""
+  property string psiphon_cdn_ips: ""
+  property string psiphon_cdn_sni: ""
+  property string exit_loc: ""
+  property string exit_loc_secs: ""
+  property bool stats_enabled: false
+  property string stats_secs: ""
   property string access_id: ""
   property string access_secret: ""
   property string access_token: ""
@@ -300,6 +315,34 @@ Item {
     }
   }
 
+  function copyTorSocksUrl() {
+    copyToClipboard(Model.torProxyUrl(tor_bind), "Tor SOCKS5 URL")
+  }
+
+  function copyTorHttpProxyUrl() {
+    if (tor_http !== "") {
+      copyToClipboard(Model.torHttpProxyUrl(tor_http), "Tor HTTP URL")
+    }
+  }
+
+  function copyPsiphonSocksUrl() {
+    copyToClipboard(Model.psiphonProxyUrl(psiphon_bind), "Psiphon SOCKS5 URL")
+  }
+
+  function copyPsiphonHttpProxyUrl() {
+    if (psiphon_http !== "") {
+      copyToClipboard(Model.psiphonHttpProxyUrl(psiphon_http), "Psiphon HTTP URL")
+    }
+  }
+
+  function toggleStats() {
+    setConfig("stats", stats_enabled ? "0" : "1")
+  }
+
+  function setExitLoc(spec) {
+    setConfig("exit_loc", spec)
+  }
+
   function copyExportEnv() {
     copyToClipboard(Model.exportEnv(proxyPort), "environment variables")
   }
@@ -386,12 +429,27 @@ Item {
         root.tls_groups = data.tls_groups
         root.routes_file = data.routes_file
         root.tor_bind = data.tor_bind
+        root.tor_http = data.tor_http
         root.tor_dir = data.tor_dir
         root.tor_bridges = data.tor_bridges
         root.tor_bridge = data.tor_bridge
+        root.tor_bridge_file = data.tor_bridge_file
+        root.tor_relays = data.tor_relays
+        root.tor_relay_ports = data.tor_relay_ports
         root.tor_pt = data.tor_pt
         root.tor_pt_dir = data.tor_pt_dir
         root.tor_country = data.tor_country
+        root.psiphon_mode = data.psiphon_mode
+        root.psiphon_region = data.psiphon_region
+        root.psiphon_bind = data.psiphon_bind
+        root.psiphon_http = data.psiphon_http
+        root.psiphon_config = data.psiphon_config
+        root.psiphon_cdn_ips = data.psiphon_cdn_ips
+        root.psiphon_cdn_sni = data.psiphon_cdn_sni
+        root.exit_loc = data.exit_loc
+        root.exit_loc_secs = data.exit_loc_secs
+        root.stats_enabled = data.stats_enabled
+        root.stats_secs = data.stats_secs
         root.access_id = data.access_id
         root.access_secret = data.access_secret
         root.access_token = data.access_token
