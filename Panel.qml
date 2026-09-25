@@ -383,33 +383,64 @@ Panel {
     property string labelText: ""
     property string hintText: ""
     property bool secret: false
+    readonly property bool isConfigured: secret ? Boolean(aether["has_" + key]) : (current !== "")
     readonly property string current: key !== "" && aether[key] !== undefined ? String(aether[key]) : ""
 
     width: parent.width
     spacing: Style.space(4)
 
-    onCurrentChanged: if (!fld.activeFocus && fld.text !== current) fld.text = current
+    onCurrentChanged: if (!secret && !fld.activeFocus && fld.text !== current) fld.text = current
 
-    Text {
-      text: labelText
-      font.pixelSize: Style.font.caption
-      font.bold: true
-      color: root.dim
-      font.family: root.fontFamily
+    RowLayout {
+      width: parent.width
+      Text {
+        Layout.fillWidth: true
+        text: labelText
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        color: root.dim
+        font.family: root.fontFamily
+      }
+      Text {
+        visible: af.secret && af.isConfigured
+        text: "Clear"
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        color: root.urgent
+        font.family: root.fontFamily
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            fld.text = ""
+            aether.setConfig(af.key, "")
+          }
+        }
+      }
     }
 
     TextField {
       id: fld
       width: parent.width
       password: secret
+      placeholderText: secret ? (af.isConfigured ? "••••••••  (configured · enter new to replace)" : "Optional secret") : ""
       font.family: root.fontFamily
       font.pixelSize: Style.font.body
       foreground: root.foreground
       accent: root.accent
       // editingFinished fires on both Enter and focus loss; a separate
       // onAccepted handler would commit the same value twice.
-      onEditingFinished: if (fld.text !== af.current) aether.setConfig(af.key, fld.text)
-      Component.onCompleted: if (af.current !== "") fld.text = af.current
+      onEditingFinished: {
+        if (secret) {
+          if (fld.text !== "") {
+            aether.setConfig(af.key, fld.text)
+            fld.text = ""
+          }
+        } else {
+          if (fld.text !== af.current) aether.setConfig(af.key, fld.text)
+        }
+      }
+      Component.onCompleted: if (!secret && af.current !== "") fld.text = af.current
     }
 
     Text {

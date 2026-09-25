@@ -28,6 +28,7 @@ ZEPTUN_TABLE=8891
 ZEPTUN_FWMARK=255
 
 mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$RUN_DIR" "$BIN_DIR"
+chmod 700 "$CONFIG_DIR" "$DATA_DIR" "$RUN_DIR" "$BIN_DIR" 2>/dev/null || true
 
 DEFAULT_CUSTOM_BIN=""
 DEFAULT_PROTOCOL="masque"
@@ -1477,18 +1478,9 @@ build_args() {
   if [[ -n "$TEAM" ]]; then
     args+=("--team" "$TEAM")
   fi
-  if [[ -n "$ACCESS_TOKEN" ]]; then
-    args+=("--access-token" "$ACCESS_TOKEN")
-  fi
-  if [[ -n "$ACCESS_ID" ]]; then
-    args+=("--access-id" "$ACCESS_ID")
-  fi
-  if [[ -n "$ACCESS_SECRET" ]]; then
-    args+=("--access-secret" "$ACCESS_SECRET")
-  fi
-  if [[ -n "$ACCESS_EMAIL" ]]; then
-    args+=("--access-email" "$ACCESS_EMAIL")
-  fi
+  # Zero Trust credentials (ACCESS_TOKEN, ACCESS_ID, ACCESS_SECRET, ACCESS_EMAIL)
+  # are passed via environment variables (see setup_core_env) to avoid exposing
+  # secrets in argv (/proc/*/cmdline) and diagnostic logs.
   if [[ "$GATEWAY" == "1" ]]; then
     args+=("--gateway")
   fi
@@ -1615,6 +1607,67 @@ build_args() {
   fi
 
   printf '%s\n' "${args[@]}"
+}
+
+setup_core_env() {
+  # Tor country setting upstream (env-only)
+  if [[ -n "$TOR_COUNTRY" ]]; then
+    export AETHER_TOR_COUNTRY="$TOR_COUNTRY"
+  else
+    unset AETHER_TOR_COUNTRY 2>/dev/null || true
+  fi
+
+  # Zero Trust credentials: pass through protected runtime environment
+  # to prevent exposure in process argv (/proc/*/cmdline) and diagnostic logs.
+  if [[ -n "$ACCESS_TOKEN" ]]; then
+    export AETHER_ACCESS_TOKEN="$ACCESS_TOKEN"
+  else
+    unset AETHER_ACCESS_TOKEN 2>/dev/null || true
+  fi
+
+  if [[ -n "$ACCESS_ID" ]]; then
+    export AETHER_ACCESS_CLIENT_ID="$ACCESS_ID"
+  else
+    unset AETHER_ACCESS_CLIENT_ID 2>/dev/null || true
+  fi
+
+  if [[ -n "$ACCESS_SECRET" ]]; then
+    export AETHER_ACCESS_CLIENT_SECRET="$ACCESS_SECRET"
+  else
+    unset AETHER_ACCESS_CLIENT_SECRET 2>/dev/null || true
+  fi
+
+  if [[ -n "$ACCESS_EMAIL" ]]; then
+    export AETHER_ACCESS_EMAIL="$ACCESS_EMAIL"
+  else
+    unset AETHER_ACCESS_EMAIL 2>/dev/null || true
+  fi
+}
+
+sanitize_log_args() {
+  local entry
+  local sanitized=()
+  local redact_next=0
+  for entry in "$@"; do
+    if [[ "$redact_next" -eq 1 ]]; then
+      sanitized+=("[REDACTED]")
+      redact_next=0
+      continue
+    fi
+    case "$entry" in
+      --access-token|--access-secret|--access-id|--access-email)
+        sanitized+=("$entry")
+        redact_next=1
+        ;;
+      --access-token=*|--access-secret=*|--access-id=*|--access-email=*)
+        sanitized+=("${entry%%=*}=[REDACTED]")
+        ;;
+      *)
+        sanitized+=("$entry")
+        ;;
+    esac
+  done
+  echo "${sanitized[*]}"
 }
 
 rotate_logs_if_needed() {
@@ -1830,7 +1883,11 @@ cmd_status() {
   "stats_enabled": $( [[ "$STATS" == "1" ]] && echo "true" || echo "false" ),
   "stats_secs": $(json_str "$STATS_SECS"),
   "access_id": $(json_str "$ACCESS_ID"),
-  "access_secret": $(json_str "$ACCESS_SECRET"),
+  "access_secret": "",
+  "access_token": "",
+  "has_access_id": $( [[ -n "$ACCESS_ID" ]] && echo "true" || echo "false" ),
+  "has_access_secret": $( [[ -n "$ACCESS_SECRET" ]] && echo "true" || echo "false" ),
+  "has_access_token": $( [[ -n "$ACCESS_TOKEN" ]] && echo "true" || echo "false" ),
   "access_email": $(json_str "$ACCESS_EMAIL"),
   "zeptun_state": $(json_str "$zstate"),
   "zeptun_available": $( [[ -n "$zbin" ]] && echo "true" || echo "false" ),
@@ -1885,12 +1942,9 @@ cmd_start() {
 
   mapfile -t ARGS < <(build_args "$bin")
 
-  echo "[$(date -Iseconds)] [plugin] Launching $bin ${ARGS[*]}" >> "$LOG_FILE"
+  echo "[$(date -Iseconds)] [plugin] Launching $bin $(sanitize_log_args "${ARGS[@]}")" >> "$LOG_FILE"
 
-  # AETHER_TOR_COUNTRY is env-only upstream (no flag)
-  if [[ -n "$TOR_COUNTRY" ]]; then
-    export AETHER_TOR_COUNTRY="$TOR_COUNTRY"
-  fi
+  setup_core_env
 
   cd "$RUN_DIR"
   setsid "$bin" "${ARGS[@]}" </dev/null >>"$LOG_FILE" 2>&1 &
@@ -1994,11 +2048,9 @@ cmd_foreground() {  local bin
 
   mapfile -t ARGS < <(build_args "$bin")
 
-  echo "[$(date -Iseconds)] [plugin] Executing $bin ${ARGS[*]}" >> "$LOG_FILE"
+  echo "[$(date -Iseconds)] [plugin] Executing $bin $(sanitize_log_args "${ARGS[@]}")" >> "$LOG_FILE"
 
-  if [[ -n "$TOR_COUNTRY" ]]; then
-    export AETHER_TOR_COUNTRY="$TOR_COUNTRY"
-  fi
+  setup_core_env
 
   cd "$RUN_DIR"
   exec "$bin" "${ARGS[@]}"
@@ -2556,7 +2608,11 @@ cmd_set_config() {
       if is_running; then
         cmd_restart
       else
-        echo "Updated $key=$val"
+        local display_val="$val"
+        if [[ "$key" == "access_secret" || "$key" == "access_token" ]]; then
+          display_val="[REDACTED]"
+        fi
+        echo "Updated $key=$display_val"
       fi
       ;;
   esac

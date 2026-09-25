@@ -76,9 +76,9 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `route_block` / `route_direct` | empty | `--route-block` / `--route-direct` | ✓ Advanced |
 | `routes_file` | empty | `--routes <path>` | ✓ Advanced |
 | `team` | empty | `--team <name>` | ✓ Advanced |
-| `access_token` | empty | `--access-token <jwt>` | ✓ Advanced |
-| `access_id` / `access_secret` | empty | `--access-id` / `--access-secret` | ✓ Advanced |
-| `access_email` | empty | `--access-email <addr>` | ✓ Advanced |
+| `access_token` | empty | `AETHER_ACCESS_TOKEN` (runtime env) | ✓ Advanced |
+| `access_id` / `access_secret` | empty | `AETHER_ACCESS_CLIENT_ID` / `AETHER_ACCESS_CLIENT_SECRET` (runtime env) | ✓ Advanced |
+| `access_email` | empty | `AETHER_ACCESS_EMAIL` (runtime env) | ✓ Advanced |
 | `gateway` | `0`, `1` | `--gateway` (with `team`) | ✓ Advanced |
 | `tor_bind` / `tor_dir` | empty | `--tor-bind` / `--tor-dir` | ✓ Advanced |
 | `tor_http` | empty | `--tor-http` | ✓ Advanced |
@@ -158,7 +158,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
   "psiphon_mode": "auto", "psiphon_region": "", "psiphon_bind": "", "psiphon_http": "",
   "psiphon_config": "", "psiphon_cdn_ips": "", "psiphon_cdn_sni": "",
   "exit_loc": "", "exit_loc_secs": "", "stats_enabled": false, "stats_secs": "",
-  "access_id": "", "access_secret": "", "access_token": "", "access_email": "",
+  "access_id": "", "access_secret": "", "access_token": "", "has_access_id": false, "has_access_secret": false, "has_access_token": false, "access_email": "",
   "discovered_cores": ["/path/to/aether"],
   "zeptun_state": "DISABLED", "zeptun_available": true,
   "zeptun_binary": "/home/user/.local/share/omarchy-aether/bin/zeptun",
@@ -183,9 +183,9 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 `aether-ctl remove-core [path]` deletes a discovered binary (defaults to active core). If the active core is running, it stops the daemon first. Removing the plugin-managed `~/.local/share/omarchy-aether/bin/` binary deletes the core files (including its `pt/` transports); any other location is deleted as a single file.
 
-### Persistence
+### Persistence and Security
 
-All state lives in two files, both rewritten atomically on every change: `~/.config/omarchy-aether/config.env` (settings) and the PID/log files under `~/.local/share/omarchy-aether/`. Nothing is kept in QML — a reboot restores the exact configuration. The daemon is not auto-started at boot unless the optional systemd unit is enabled.
+All state lives in two files, both rewritten atomically on every change: `~/.config/omarchy-aether/config.env` (settings) and the PID/log files under `~/.local/share/omarchy-aether/`. Permissions are kept user-private (`0600` for files, `0700` for directories). Zero Trust credentials (`access_token`, `access_id`, `access_secret`, `access_email`) are passed directly into the core daemon via supported runtime environment variables (`AETHER_ACCESS_*`) rather than command-line arguments. This prevents credential exposure in `/proc/*/cmdline` and process listings. All diagnostic launch logging redacts sensitive tokens, and status queries/UI state never return stored secrets in cleartext (returning boolean configuration indicators instead). Nothing is kept in QML — a reboot restores the exact configuration. The daemon is not auto-started at boot unless the optional systemd unit is enabled.
 
 ### Core install
 

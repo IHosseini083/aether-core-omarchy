@@ -97,6 +97,9 @@ Item {
   property string access_secret: ""
   property string access_token: ""
   property string access_email: ""
+  property bool has_access_id: false
+  property bool has_access_secret: false
+  property bool has_access_token: false
 
   // Zeptun system-wide routing (optional TUN engine)
   property string zeptun_state: "DISABLED"
@@ -457,8 +460,11 @@ Item {
         root.stats_enabled = data.stats_enabled
         root.stats_secs = data.stats_secs
         root.access_id = data.access_id
-        root.access_secret = data.access_secret
-        root.access_token = data.access_token
+        root.access_secret = ""
+        root.access_token = ""
+        root.has_access_id = data.has_access_id
+        root.has_access_secret = data.has_access_secret
+        root.has_access_token = data.has_access_token
         root.access_email = data.access_email
         root.zeptun_state = data.zeptun_state
         root.zeptun_available = data.zeptun_available
