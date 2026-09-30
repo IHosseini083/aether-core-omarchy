@@ -65,12 +65,12 @@ Panel {
     function systemRouteStop(): string { aether.systemRouteStop(); return "ok" }
     function systemRouteRestart(): string { aether.systemRouteRestart(); return "ok" }
     function tab(t: string): string {
-      if (t === "advanced") {
+      // Settings categories live under the "settings" tab; only real tab
+      // names may be assigned to currentTab.
+      const categories = ["core", "network", "circumvention", "advanced"]
+      if (t === "cores" || categories.includes(t)) {
         root.currentTab = "settings"
-        root.settingsCategory = "advanced"
-      } else if (t === "cores") {
-        root.currentTab = "settings"
-        root.settingsCategory = "core"
+        root.settingsCategory = t === "cores" ? "core" : t
       } else {
         root.currentTab = t
       }
@@ -373,6 +373,20 @@ Panel {
         }
       }
     }
+  }
+
+  // Responsive form container for short settings fields. Lays children out
+  // in two equal columns when the panel is wide enough, stacks them
+  // single-column when narrow. Children must bind `width: <id>.cellWidth`
+  // so Grid sizes its cells correctly (AetherField defaults to full width).
+  component ResponsiveFormGrid: Grid {
+    id: rfg
+    property real breakpoint: Style.space(460)
+    readonly property bool stacked: width < breakpoint
+    readonly property real cellWidth: stacked ? width : (width - columnSpacing) / 2
+    columns: stacked ? 1 : 2
+    columnSpacing: Style.space(8)
+    rowSpacing: Style.space(8)
   }
 
   // Labeled input bound to one ctl config key. Syncs from status polls while
@@ -1391,17 +1405,16 @@ Panel {
           foreground: root.dim
         }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: portsPair
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "socks_port"; labelText: "SOCKS5 port" }
-          AetherField { Layout.fillWidth: true; key: "http_proxy_port"; labelText: "HTTP CONNECT port (0 = off)" }
-          AetherField { Layout.fillWidth: true; key: "dns"; labelText: "Tunnel resolvers" }
-          AetherField { Layout.fillWidth: true; key: "routes_file"; labelText: "Routes file (--routes)" }
+          AetherField { width: portsPair.cellWidth; key: "socks_port"; labelText: "SOCKS5 port" }
+          AetherField { width: portsPair.cellWidth; key: "http_proxy_port"; labelText: "HTTP CONNECT port (0 = off)" }
         }
+
+        AetherField { key: "dns"; labelText: "Tunnel resolvers" }
+        AetherField { key: "routes_file"; labelText: "Routes file (--routes)" }
 
         PanelSectionHeader {
           text: "ROUTING RULES & BYPASS"
@@ -1416,20 +1429,18 @@ Panel {
           foreground: root.dim
         }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: peersGrid
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "peer"; labelText: "Forced peer (ip:port)" }
-          AetherField { Layout.fillWidth: true; key: "wg_peer"; labelText: "WireGuard peer (--wg-peer)" }
-          AetherField { Layout.fillWidth: true; key: "h2_peer"; labelText: "HTTP/2 peer (--h2-peer)" }
-          AetherField { Layout.fillWidth: true; key: "upstream"; labelText: "Upstream proxy URL" }
-          AetherField { Layout.fillWidth: true; key: "wiw_outer"; labelText: "WiW outer hop (ip:port)" }
-          AetherField { Layout.fillWidth: true; key: "wiw_inner"; labelText: "WiW inner hop (ip:port)" }
-          AetherField { Layout.fillWidth: true; key: "mim_outer"; labelText: "MIM outer hop (ip:port)" }
-          AetherField { Layout.fillWidth: true; key: "mim_inner"; labelText: "MIM inner hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "peer"; labelText: "Forced peer (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "wg_peer"; labelText: "WireGuard peer (--wg-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "h2_peer"; labelText: "HTTP/2 peer (--h2-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "upstream"; labelText: "Upstream proxy URL" }
+          AetherField { width: peersGrid.cellWidth; key: "wiw_outer"; labelText: "WiW outer hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "wiw_inner"; labelText: "WiW inner hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "mim_outer"; labelText: "MIM outer hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "mim_inner"; labelText: "MIM inner hop (ip:port)" }
         }
 
         PanelSectionHeader {
@@ -1439,16 +1450,14 @@ Panel {
 
         AetherField { key: "team"; labelText: "Team name" }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: accessGrid
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "access_id"; labelText: "Service token ID" }
-          AetherField { Layout.fillWidth: true; secret: true; key: "access_secret"; labelText: "Service token secret" }
-          AetherField { Layout.fillWidth: true; secret: true; key: "access_token"; labelText: "Enrolment token (JWT)" }
-          AetherField { Layout.fillWidth: true; key: "access_email"; labelText: "Enrolment email" }
+          AetherField { width: accessGrid.cellWidth; key: "access_id"; labelText: "Service token ID" }
+          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_secret"; labelText: "Service token secret" }
+          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_token"; labelText: "Enrolment token (JWT)" }
+          AetherField { width: accessGrid.cellWidth; key: "access_email"; labelText: "Enrolment email" }
         }
 
         Toggle {
@@ -1505,15 +1514,14 @@ Panel {
           onClicked: aether.setConfig("no_quic_v2", aether.no_quic_v2 ? "0" : "1")
         }
 
-        GridLayout {
-          width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
+        AetherField { key: "tls_groups"; labelText: "TLS key share groups" }
 
-          AetherField { Layout.fillWidth: true; key: "tls_groups"; labelText: "TLS key share groups" }
-          AetherField { Layout.fillWidth: true; key: "fragment_size"; labelText: "Fragment size (bytes)" }
-          AetherField { Layout.fillWidth: true; key: "fragment_delay"; labelText: "Fragment delay (ms)" }
+        ResponsiveFormGrid {
+          id: fragPair
+          width: parent.width
+
+          AetherField { width: fragPair.cellWidth; key: "fragment_size"; labelText: "Fragment size (bytes)" }
+          AetherField { width: fragPair.cellWidth; key: "fragment_delay"; labelText: "Fragment delay (ms)" }
         }
 
         PanelSectionHeader {
@@ -1550,16 +1558,14 @@ Panel {
 
         AetherField { key: "psiphon_region"; labelText: "Psiphon egress country code (e.g. DE, US, NL, CH)" }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: psiphonGrid
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "psiphon_bind"; labelText: "Psiphon SOCKS5 bind (default 127.0.0.1:1821)" }
-          AetherField { Layout.fillWidth: true; key: "psiphon_http"; labelText: "Psiphon HTTP proxy bind address" }
-          AetherField { Layout.fillWidth: true; key: "psiphon_cdn_ips"; labelText: "CDN fronting IP list (comma-separated)" }
-          AetherField { Layout.fillWidth: true; key: "psiphon_cdn_sni"; labelText: "CDN fronting SNI names" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_bind"; labelText: "Psiphon SOCKS5 bind (default 127.0.0.1:1821)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_http"; labelText: "Psiphon HTTP proxy bind address" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_ips"; labelText: "CDN fronting IP list (comma-separated)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sni"; labelText: "CDN fronting SNI names" }
         }
 
         AetherField { key: "psiphon_config"; labelText: "Psiphon custom JSON config file (--psiphon-config)" }
@@ -1617,18 +1623,16 @@ Panel {
           ]
         }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: torGrid
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "tor_bind"; labelText: "Tor proxy bind address" }
-          AetherField { Layout.fillWidth: true; key: "tor_http"; labelText: "Tor HTTP proxy address (--tor-http)" }
-          AetherField { Layout.fillWidth: true; key: "tor_country"; labelText: "Bridge country (e.g. ir)" }
-          AetherField { Layout.fillWidth: true; key: "tor_bridge_file"; labelText: "Tor bridge list file (--tor-bridge-file)" }
-          AetherField { Layout.fillWidth: true; key: "tor_dir"; labelText: "Tor state directory" }
-          AetherField { Layout.fillWidth: true; key: "tor_pt_dir"; labelText: "Transport search directory" }
+          AetherField { width: torGrid.cellWidth; key: "tor_bind"; labelText: "Tor proxy bind address" }
+          AetherField { width: torGrid.cellWidth; key: "tor_http"; labelText: "Tor HTTP proxy address (--tor-http)" }
+          AetherField { width: torGrid.cellWidth; key: "tor_country"; labelText: "Bridge country (e.g. ir)" }
+          AetherField { width: torGrid.cellWidth; key: "tor_bridge_file"; labelText: "Tor bridge list file (--tor-bridge-file)" }
+          AetherField { width: torGrid.cellWidth; key: "tor_dir"; labelText: "Tor state directory" }
+          AetherField { width: torGrid.cellWidth; key: "tor_pt_dir"; labelText: "Transport search directory" }
         }
 
         AetherField { key: "tor_bridge"; labelText: "Custom bridge line (obfs4 1.2.3.4:443 …)" }
@@ -1685,18 +1689,16 @@ Panel {
           foreground: root.dim
         }
 
-        GridLayout {
+        ResponsiveFormGrid {
+          id: timingGrid
           width: parent.width
-          columns: 2
-          columnSpacing: Style.space(8)
-          rowSpacing: Style.space(8)
 
-          AetherField { Layout.fillWidth: true; key: "keepalive"; labelText: "WireGuard keepalive (s)" }
-          AetherField { Layout.fillWidth: true; key: "validate_secs"; labelText: "Data-plane validate (s)" }
-          AetherField { Layout.fillWidth: true; key: "startup_secs"; labelText: "MASQUE startup deadline (s)" }
-          AetherField { Layout.fillWidth: true; key: "reconnect_secs"; labelText: "Reconnect delay (s)" }
-          AetherField { Layout.fillWidth: true; key: "exit_loc_secs"; labelText: "Exit check interval (s, default 60)" }
-          AetherField { Layout.fillWidth: true; key: "stats_secs"; labelText: "Traffic stats interval (s, default 15)" }
+          AetherField { width: timingGrid.cellWidth; key: "keepalive"; labelText: "WireGuard keepalive (s)" }
+          AetherField { width: timingGrid.cellWidth; key: "validate_secs"; labelText: "Data-plane validate (s)" }
+          AetherField { width: timingGrid.cellWidth; key: "startup_secs"; labelText: "MASQUE startup deadline (s)" }
+          AetherField { width: timingGrid.cellWidth; key: "reconnect_secs"; labelText: "Reconnect delay (s)" }
+          AetherField { width: timingGrid.cellWidth; key: "exit_loc_secs"; labelText: "Exit check interval (s, default 60)" }
+          AetherField { width: timingGrid.cellWidth; key: "stats_secs"; labelText: "Traffic stats interval (s, default 15)" }
         }
 
         PanelSectionHeader {
