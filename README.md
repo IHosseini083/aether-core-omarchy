@@ -165,6 +165,14 @@ To have **system-wide routing** start with it, install `systemd/zeptun.service` 
 
 The Routing tab can route every application's traffic through the tunnel — not just proxy-aware apps — using [Zeptun](https://github.com/Noisemux/zeptun), a userspace tun2socks engine, pointed at Aether's local SOCKS5 port.
 
+**Transport-aware egress**
+
+The engine follows the selected transport, so the whole system exits where the transport says:
+
+- Direct transports (MASQUE, WireGuard, Gool, MIM), the reverse chains (Tor → WARP, Psiphon → WARP) and the standalone modes (`--tor-only`, `--psiphon-only`) serve their exit on the main SOCKS port — the engine feeds that port.
+- The chain transports **WARP → Tor** and **WARP → Psiphon** keep the WARP exit on the main port and serve the chain exit on their own listeners (`--tor-bind`, default `127.0.0.1:1820`; `--psiphon-bind`, default `127.0.0.1:1821`) — the engine feeds those, so system traffic genuinely exits through Tor or Psiphon. The end-to-end check accepts the non-WARP exit accordingly, and readiness probes give Tor/Psiphon a longer bounded window to finish bootstrapping.
+- Switching transport (or changing `socks_port`/`tor_bind`/`psiphon_bind`) while routing is active restarts the engine so the new egress applies.
+
 **Setup**
 
 1. Connect the Aether tunnel.
@@ -180,7 +188,7 @@ The Routing tab can route every application's traffic through the tunnel — not
 
 - The engine is only marked `RUNNING` after the TUN device, the routing policy, **and** a real end-to-end traffic check all succeed; any failure tears the engine down and restores the previous network state before reporting an error.
 - Teardown removes **only** what this integration created — the `zeptun0` interface and policy rules for table `8891`. Routes, rules, and firewalls outside it are never touched.
-- Routing loops are prevented by the core's firewall mark (`SO_MARK 0xff`, enabled automatically and inert without TUN mode) plus live exclusion of Aether's own endpoints. LAN, link-local, and multicast ranges are always excluded.
+- Routing loops are prevented by the core's firewall mark (`SO_MARK 0xff`, enabled automatically and inert without TUN mode) plus a snapshot of the core's and its helper processes' current endpoints. The mark does not propagate to child helpers (`psiphon-tunnel-core`, Tor pluggable transports), so their dial-outs rely on that snapshot — restarting routing refreshes it. LAN, link-local, and multicast ranges are always excluded.
 - IPv4-only mode **blocks** IPv6 through the routing policy rather than leaking it; choose IPv4+IPv6 to carry both families.
 - Crash detection runs on every status poll; restarts are bounded (three attempts with backoff) — a broken setup fails visibly instead of flapping.
 

@@ -134,6 +134,8 @@ Item {
   property bool sysroute_offload: true
   property string sysroute_io_backend: "auto"
   property string sysroute_log_level: "warn"
+  property string sysroute_egress: ""
+  property string sysroute_egress_kind: "warp"
 
   // Logs & Operations
   property string logsText: ""
@@ -498,6 +500,8 @@ Item {
         root.sysroute_offload = data.sysroute_offload
         root.sysroute_io_backend = data.sysroute_io_backend
         root.sysroute_log_level = data.sysroute_log_level
+        root.sysroute_egress = data.sysroute_egress
+        root.sysroute_egress_kind = data.sysroute_egress_kind
       }
     }
   }

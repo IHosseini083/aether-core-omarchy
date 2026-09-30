@@ -563,7 +563,8 @@ probe_trace() {
 # Zeptun — optional system-wide TUN routing engine
 #
 # Chain: system traffic -> zeptun TUN -> zeptun SOCKS5 client ->
-#        Aether local SOCKS5 -> Aether tunnel.
+#        Aether egress SOCKS5 -> Aether tunnel. The egress endpoint follows
+#        the selected transport (see tun_egress_addr).
 #
 # Everything here is bounded: every external probe has a timeout, the start
 # sequence has a deadline, and teardown removes only the resources this
@@ -804,6 +805,79 @@ zeptun_teardown() {
   zeptun_cleanup_network
 }
 
+# Which SOCKS endpoint system-wide (TUN) traffic must be fed into, and what
+# kind of exit it represents. Chain transports split their exits across two
+# listeners: --tor/--psiphon keep the WARP exit on the main --bind port and
+# serve the Tor/Psiphon exit on --tor-bind/--psiphon-bind. TUN follows the
+# selected transport, so picking WARP → Tor routes the whole system out of
+# Tor. --tor-only/--psiphon-only and the reverse chains serve their exit on
+# the main port, like every direct transport.
+tun_egress_addr() {
+  local addr
+  case "$PROTOCOL" in
+    tor)     addr="${TOR_BIND:-127.0.0.1:1820}" ;;
+    psiphon) addr="${PSIPHON_BIND:-127.0.0.1:1821}" ;;
+    *)       addr="127.0.0.1:${SOCKS_PORT}" ;;
+  esac
+  [[ "$addr" == *:* ]] || addr="127.0.0.1:${addr}"
+  printf '%s' "$addr"
+}
+
+tun_egress_kind() {
+  # The kind of exit the chosen endpoint actually serves: the chain
+  # transports (--tor/--psiphon) and the standalone modes (--tor-only/
+  # --psiphon-only) exit through Tor/Psiphon; everything else — including
+  # the reverse chains — exits through WARP on the main port.
+  case "$PROTOCOL" in
+    tor|tor-only)          printf 'tor' ;;
+    psiphon|psiphon-only)  printf 'psiphon' ;;
+    *)                     printf 'warp' ;;
+  esac
+}
+
+# Readiness check for the SOCKS endpoint TUN will feed. A WARP exit proves
+# itself with a Cloudflare trace; Tor/Psiphon egress answers warp=off (and
+# Cloudflare sometimes refuses Tor exits outright), so for those any real
+# HTTPS response through the chain counts as proof it passes traffic.
+probe_egress() {
+  local addr="${1:-127.0.0.1:${SOCKS_PORT}}"
+  local kind="${2:-warp}"
+  local trace
+  trace=$(curl -s --connect-timeout 2 -m 4 -x "socks5h://${addr}" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
+  if [[ "$trace" == *"warp="* ]]; then
+    case "$kind" in
+      warp) [[ "$trace" == *"warp=on"* || "$trace" == *"warp=plus"* ]] && return 0 ;;
+      *)    [[ "$trace" == *"warp=off"* ]] && return 0 ;;
+    esac
+    return 1
+  fi
+  [[ "$kind" == "warp" ]] && return 1
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 -m 5 -x "socks5h://${addr}" https://www.gstatic.com/generate_204 2>/dev/null || true)
+  [[ "$code" == "204" || "$code" == "200" ]]
+}
+
+# End-to-end check through the live TUN (no explicit proxy flags): ordinary
+# unproxied system traffic must leave through the tunnel. For a WARP exit
+# that means warp=on; a Tor/Psiphon exit must NOT answer warp=on (that would
+# mean the traffic bypassed the chain) — any real response is accepted.
+e2e_system_check() {
+  local kind="${1:-warp}"
+  local trace
+  trace=$(curl -s --connect-timeout 3 -m 6 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
+  if [[ "$trace" == *"warp="* ]]; then
+    case "$kind" in
+      warp) [[ "$trace" == *"warp=on"* || "$trace" == *"warp=plus"* ]] && return 0 ;;
+      *)    [[ "$trace" == *"warp=off"* ]] && return 0 ;;
+    esac
+    return 1
+  fi
+  [[ "$kind" == "warp" ]] && return 1
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 -m 6 https://www.gstatic.com/generate_204 2>/dev/null || true)
+  [[ "$code" == "204" ]]
+}
+
 # Aether's own upstream sockets must never re-enter the TUN (routing loop).
 # Primary defense: the firewall mark — zeptun's policy rules exclude marked
 # packets, and the core is (re)started with --mark 0xff by this integration.
@@ -813,6 +887,15 @@ zeptun_loop_guards() {
   local aether_pid line ip
   aether_pid=$(get_running_pid || true)
   if [[ -n "$aether_pid" ]] && command -v ss &>/dev/null; then
+    local -a guard_pids=("$aether_pid")
+    # The psiphon transport runs as a child process (psiphon-tunnel-core);
+    # any sockets it opens directly must stay out of the TUN as well.
+    local child
+    while IFS= read -r child; do
+      [[ -n "$child" ]] && guard_pids+=("$child")
+    done < <(pgrep -P "$aether_pid" 2>/dev/null || true)
+    local pid_list
+    pid_list=$(IFS='|'; echo "${guard_pids[*]}")
     # ss -tnp: State Recv-Q Send-Q Local Peer ... -> peer is column 5.
     while IFS= read -r line; do
       ip=$(printf '%s' "$line" | awk '{print $5}' | sed 's/:[0-9]*$//; s/^\[//; s/\]$//')
@@ -821,13 +904,14 @@ zeptun_loop_guards() {
         127.*|0.0.0.0|::1|::) continue ;;
       esac
       [[ " ${excludes[*]:-} " == *" $ip "* ]] || excludes+=("$ip")
-    done < <(timeout 2 ss -tnp state established 2>/dev/null | grep -F "pid=$aether_pid" || true)
+    done < <(timeout 2 ss -tnp state established 2>/dev/null | grep -E "pid=(${pid_list})[^0-9]" || true)
   fi
   printf '%s\n' "${excludes[@]:-}"
 }
 
 zeptun_write_conf() {
-  local socks_server="127.0.0.1:${SOCKS_PORT}"
+  local socks_server
+  socks_server=$(tun_egress_addr)
   local address v6="${SYSROUTE_IPV6}" dns_mode="${SYSROUTE_DNS_MODE}" udp_mode="${SYSROUTE_UDP_MODE}"
   local preset="${SYSROUTE_PRESET:-desktop}" mtu="${SYSROUTE_MTU:-1500}"
 
@@ -1131,19 +1215,23 @@ cmd_system_route_start() {
     cmd_restart
   fi
 
-  # Aether must actually pass traffic through its SOCKS5 endpoint before we
-  # dare redirect the system into it.
-  local ready=0 i
-  for i in 1 2 3; do
-    if probe_trace "$SOCKS_PORT" >/dev/null 2>&1; then
+  # Aether must actually pass traffic through the SOCKS endpoint TUN will
+  # feed before we dare redirect the system into it. Tor/Psiphon chains may
+  # still be bootstrapping, so they get a longer bounded wait.
+  local egress kind tries=3 ready=0 i
+  egress=$(tun_egress_addr)
+  kind=$(tun_egress_kind)
+  [[ "$kind" != "warp" ]] && tries=12
+  for i in $(seq 1 "$tries"); do
+    if probe_egress "$egress" "$kind" >/dev/null 2>&1; then
       ready=1
       break
     fi
     sleep 1
   done
   if (( ready != 1 )); then
-    zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether SOCKS5 not ready"
-    echo "Aether SOCKS5 endpoint is not passing traffic. Start/connect the tunnel first." >&2
+    zeptun_state_write "FAILED" "" "$Z_RETRIES" "aether egress SOCKS not ready"
+    echo "Aether egress SOCKS endpoint ($egress) is not passing traffic. Start/connect the tunnel first." >&2
     return 1
   fi
 
@@ -1222,12 +1310,12 @@ cmd_system_route_start() {
     resolvectl flush-caches 2>/dev/null || true
   fi
 
-  # End-to-end: ordinary (unproxied) traffic must now exit via the tunnel.
+  # End-to-end: ordinary (unproxied) traffic must now exit via the tunnel,
+  # through the same kind of exit the transport promises (warp=on for direct
+  # transports, a non-WARP response for Tor/Psiphon egress).
   local ok=0
-  local trace
   for i in 1 2 3; do
-    trace=$(curl -s --connect-timeout 2 -m 4 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null || true)
-    if [[ "$trace" == *"warp=on"* ]]; then
+    if e2e_system_check "$kind"; then
       ok=1
       break
     fi
@@ -1241,8 +1329,12 @@ cmd_system_route_start() {
   fi
 
   zeptun_state_write "RUNNING" "$pid" 0 ""
-  zeptun_log "system routing active (pid $pid, tun $ZEPTUN_TUN, table $ZEPTUN_TABLE)"
-  echo "System routing active (tun $ZEPTUN_TUN)."
+  zeptun_log "system routing active (pid $pid, tun $ZEPTUN_TUN, table $ZEPTUN_TABLE, egress $kind via $egress)"
+  if [[ "$kind" == "warp" ]]; then
+    echo "System routing active (tun $ZEPTUN_TUN)."
+  else
+    echo "System routing active (tun $ZEPTUN_TUN, $kind egress via $egress)."
+  fi
 }
 
 cmd_system_route_stop() {
@@ -1319,7 +1411,9 @@ cmd_system_route_status() {
   "sysroute_tcp_fastopen": $( [[ "$SYSROUTE_TCP_FASTOPEN" == "1" ]] && echo "true" || echo "false" ),
   "sysroute_offload": $( [[ "$SYSROUTE_OFFLOAD" != "0" ]] && echo "true" || echo "false" ),
   "sysroute_io_backend": $(json_str "$SYSROUTE_IO_BACKEND"),
-  "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL")
+  "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL"),
+  "sysroute_egress": $(json_str "$(tun_egress_addr)"),
+  "sysroute_egress_kind": $(json_str "$(tun_egress_kind)")
 }
 EOF
 }
@@ -1921,6 +2015,8 @@ cmd_status() {
   "sysroute_offload": $( [[ "$SYSROUTE_OFFLOAD" != "0" ]] && echo "true" || echo "false" ),
   "sysroute_io_backend": $(json_str "$SYSROUTE_IO_BACKEND"),
   "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL"),
+  "sysroute_egress": $(json_str "$(tun_egress_addr)"),
+  "sysroute_egress_kind": $(json_str "$(tun_egress_kind)"),
   "discovered_cores": $cores_json
 }
 EOF
@@ -2604,6 +2700,22 @@ cmd_set_config() {
         echo "Updated $key=$val"
       fi
       ;;
+    socks_port|tor_bind|psiphon_bind)
+      # The engine dials one of these directly (main / tor / psiphon egress)
+      # and the core must rebind. Restart the core, then follow routing.
+      local was_routing=0
+      zeptun_state_read
+      [[ "$Z_STATE" == "RUNNING" || "$Z_STATE" == "STARTING" ]] && was_routing=1
+      if is_running; then
+        cmd_restart
+      fi
+      if [[ "$SYSROUTE_ENABLED" == "1" && "$was_routing" == "1" ]] && is_running; then
+        zeptun_spawn_async_start
+        echo "Updated $key=$val (system routing restarted)"
+      else
+        echo "Updated $key=$val"
+      fi
+      ;;
     *)
       if is_running; then
         cmd_restart
@@ -2632,7 +2744,18 @@ cmd_set_protocol() {
   save_config
 
   if is_running; then
+    # The engine's egress port depends on the transport; note whether routing
+    # is up so it can be brought back following the newly selected transport.
+    zeptun_state_read
+    local was_routing=0
+    [[ "$Z_STATE" == "RUNNING" || "$Z_STATE" == "STARTING" ]] && was_routing=1
     cmd_restart
+    if [[ "$SYSROUTE_ENABLED" == "1" && "$was_routing" == "1" ]] && is_running; then
+      zeptun_spawn_async_start
+      echo "Protocol set to $proto (h2=$h2); system routing restarted"
+    else
+      echo "Protocol set to $proto (h2=$h2)"
+    fi
   else
     echo "Protocol set to $proto (h2=$h2)"
   fi

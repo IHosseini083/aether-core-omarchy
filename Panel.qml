@@ -1894,7 +1894,13 @@ Panel {
           Text {
             width: parent.width
             visible: aether.zeptun_state === "RUNNING"
-            text: "tun " + aether.zeptun_tun + " · pid " + aether.zeptun_pid + " · up " + aether.zeptun_uptime_s + "s"
+            text: {
+              var line = "tun " + aether.zeptun_tun + " · pid " + aether.zeptun_pid + " · up " + aether.zeptun_uptime_s + "s"
+              if (aether.sysroute_egress !== "") {
+                line += " · egress " + Model.tunEgressLabel(aether.sysroute_egress_kind, aether.sysroute_egress)
+              }
+              return line
+            }
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
             color: root.dim

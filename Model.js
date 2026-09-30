@@ -137,7 +137,9 @@ function parseStatus(rawJson) {
     sysroute_tcp_fastopen: false,
     sysroute_offload: true,
     sysroute_io_backend: "auto",
-    sysroute_log_level: "warn"
+    sysroute_log_level: "warn",
+    sysroute_egress: "",
+    sysroute_egress_kind: "warp"
   };
 
   if (!rawJson || typeof rawJson !== "string") {
@@ -264,7 +266,9 @@ function parseStatus(rawJson) {
       sysroute_tcp_fastopen: parsed.sysroute_tcp_fastopen === true,
       sysroute_offload: parsed.sysroute_offload !== false,
       sysroute_io_backend: String(parsed.sysroute_io_backend || "auto"),
-      sysroute_log_level: String(parsed.sysroute_log_level || "warn")
+      sysroute_log_level: String(parsed.sysroute_log_level || "warn"),
+      sysroute_egress: String(parsed.sysroute_egress || ""),
+      sysroute_egress_kind: String(parsed.sysroute_egress_kind || "warp")
     };
   } catch (e) {
     return defaultState;
@@ -438,8 +442,15 @@ function curlSnippet(port) {
   return "curl -x " + u + " https://www.cloudflare.com/cdn-cgi/trace";
 }
 
-function zeptunStateLabel(state, error, available) {
-  switch (state) {
+// Human label for the SOCKS endpoint system routing (TUN) feeds traffic into.
+// Kind: "warp" (direct transports, reverse and only chains) or "tor"/"psiphon"
+// when the engine points at the chained exit's own SOCKS port.
+function tunEgressLabel(kind, addr) {
+  var name = kind === "tor" ? "Tor" : kind === "psiphon" ? "Psiphon" : "WARP";
+  return name + (addr ? " · " + addr : "");
+}
+
+function zeptunStateLabel(state, error, available) {  switch (state) {
     case "RUNNING": return "System routing active";
     case "STARTING": return "Starting system routing…";
     case "STOPPING": return "Stopping system routing…";
