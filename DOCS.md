@@ -140,7 +140,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 ```json
 {
-  "plugin_version": "1.8.0", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.1.0",
+  "plugin_version": "1.8.1", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.1.0",
   "core_pinned_version": "v2.1.0", "core_update_available": false,
   "has_cap_net_admin": false, "running": true, "pid": "1234", "connected": true,
   "ip": "104.28.x.x", "colo": "FRA", "loc": "IR", "warp": "on", "latency_ms": 1091,

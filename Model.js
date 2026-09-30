@@ -20,7 +20,7 @@ function getHeroPhrase(index) {
 
 function parseStatus(rawJson) {
   var defaultState = {
-    plugin_version: "1.8.0",
+    plugin_version: "1.8.1",
     installed: false,
     binary: "",
     binary_version: "",
@@ -149,7 +149,7 @@ function parseStatus(rawJson) {
   try {
     var parsed = JSON.parse(rawJson);
     return {
-      plugin_version: String(parsed.plugin_version || "1.7.0"),
+      plugin_version: String(parsed.plugin_version || "1.8.1"),
       installed: parsed.installed === true,
       binary: String(parsed.binary || ""),
       binary_version: String(parsed.binary_version || ""),

@@ -8,7 +8,7 @@ Item {
   id: root
 
   // Core status
-  property string pluginVersion: "1.8.0"
+  property string pluginVersion: "1.8.1"
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""

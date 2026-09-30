@@ -300,7 +300,7 @@ Panel {
             Item { Layout.fillWidth: true }
 
             Text {
-              text: "Plugin v" + (aether.pluginVersion !== "" ? aether.pluginVersion : "1.7.0")
+              text: "Plugin v" + (aether.pluginVersion !== "" ? aether.pluginVersion : "1.8.1")
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               color: root.dim
