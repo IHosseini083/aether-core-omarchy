@@ -651,65 +651,100 @@ Panel {
 
       PanelSeparator { width: parent.width }
 
-      // Transport Selection
+      // Transport Selection. Grouped by the core's actual protocol model:
+      // direct Cloudflare WARP carriers vs. third-party circumvention
+      // networks whose routing mode is picked in the cards below.
       PanelSectionHeader {
         text: "TRANSPORT PROTOCOL"
         foreground: root.foreground
       }
 
-      GridLayout {
+      Column {
         width: parent.width
-        columns: 4
-        columnSpacing: Style.space(4)
-        rowSpacing: Style.space(4)
+        spacing: Style.space(4)
 
-        Button {
-          Layout.fillWidth: true
-          text: "MASQUE"
-          selected: aether.protocol === "masque" && !aether.h2
-          onClicked: aether.setProtocol("masque", false)
+        Text {
+          width: parent.width
+          text: "DIRECT WARP"
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          color: root.dim
+          font.family: root.fontFamily
         }
 
-        Button {
-          Layout.fillWidth: true
-          text: "HTTP/2"
-          selected: aether.protocol === "masque" && aether.h2
-          onClicked: aether.setProtocol("masque", true)
+        RowLayout {
+          width: parent.width
+          spacing: Style.space(4)
+
+          Button {
+            Layout.fillWidth: true
+            text: "MASQUE · QUIC"
+            selected: aether.protocol === "masque" && !aether.h2
+            onClicked: aether.setProtocol("masque", false)
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "MASQUE · HTTP/2"
+            selected: aether.protocol === "masque" && aether.h2
+            onClicked: aether.setProtocol("masque", true)
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "WireGuard"
+            selected: aether.protocol === "wg"
+            onClicked: aether.setConfig("protocol", "wg")
+          }
         }
 
-        Button {
-          Layout.fillWidth: true
-          text: "WireGuard"
-          selected: aether.protocol === "wg"
-          onClicked: aether.setConfig("protocol", "wg")
+        RowLayout {
+          width: parent.width
+          spacing: Style.space(4)
+
+          Button {
+            Layout.fillWidth: true
+            text: "Gool (WARP-in-WARP)"
+            selected: aether.protocol === "gool"
+            onClicked: aether.setConfig("protocol", "gool")
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "MIM (MASQUE-in-MASQUE)"
+            selected: aether.protocol === "mim"
+            onClicked: aether.setConfig("protocol", "mim")
+          }
         }
 
-        Button {
-          Layout.fillWidth: true
-          text: "Gool"
-          selected: aether.protocol === "gool"
-          onClicked: aether.setConfig("protocol", "gool")
+        Item { width: 1; height: Style.space(8) }
+
+        Text {
+          width: parent.width
+          text: "CIRCUMVENTION"
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          color: root.dim
+          font.family: root.fontFamily
         }
 
-        Button {
-          Layout.fillWidth: true
-          text: "MIM"
-          selected: aether.protocol === "mim"
-          onClicked: aether.setConfig("protocol", "mim")
-        }
+        RowLayout {
+          width: parent.width
+          spacing: Style.space(4)
 
-        Button {
-          Layout.fillWidth: true
-          text: "Psiphon"
-          selected: Model.isPsiphon(aether.protocol)
-          onClicked: aether.setConfig("protocol", aether.protocol.indexOf("psiphon") === 0 ? aether.protocol : "psiphon")
-        }
+          Button {
+            Layout.fillWidth: true
+            text: "Psiphon"
+            selected: Model.isPsiphon(aether.protocol)
+            onClicked: aether.setConfig("protocol", aether.protocol.indexOf("psiphon") === 0 ? aether.protocol : "psiphon")
+          }
 
-        Button {
-          Layout.fillWidth: true
-          text: "Tor"
-          selected: Model.isTor(aether.protocol)
-          onClicked: aether.setConfig("protocol", aether.protocol.indexOf("tor") === 0 ? aether.protocol : "tor")
+          Button {
+            Layout.fillWidth: true
+            text: "Tor"
+            selected: Model.isTor(aether.protocol)
+            onClicked: aether.setConfig("protocol", aether.protocol.indexOf("tor") === 0 ? aether.protocol : "tor")
+          }
         }
       }
 
