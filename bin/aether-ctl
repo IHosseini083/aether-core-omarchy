@@ -41,14 +41,18 @@ DEFAULT_UPSTREAM=""
 DEFAULT_MARK="0"
 DEFAULT_QUICK_RECONNECT=1
 DEFAULT_H2=0
-DEFAULT_FRAGMENT=0
+DEFAULT_FRAGMENT=1
 DEFAULT_FRAGMENT_SIZE="16-32"
 DEFAULT_FRAGMENT_DELAY="2-10"
 DEFAULT_NO_QUIC_V2=0
 DEFAULT_ECH="off"
+DEFAULT_ECH_DNS=""
+DEFAULT_ECH_DOMAIN=""
 DEFAULT_NO_DATA_CHECK=0
 DEFAULT_KEEPALIVE=5
 DEFAULT_PEER=""
+DEFAULT_GOOL_PEER=""
+DEFAULT_API_FRAGMENT=0
 DEFAULT_WIW_OUTER=""
 DEFAULT_WIW_INNER=""
 DEFAULT_MIM_OUTER=""
@@ -69,6 +73,10 @@ DEFAULT_STARTUP_SECS=""
 DEFAULT_RECONNECT_SECS=""
 DEFAULT_PERF=""
 DEFAULT_TLS_GROUPS=""
+DEFAULT_TLS_CIPHERS=""
+DEFAULT_DISABLE_GREASE=0
+DEFAULT_TLS_VERIFY=0
+DEFAULT_ENROLL_ADDRESS=""
 DEFAULT_ROUTES_FILE=""
 DEFAULT_TOR_BIND=""
 DEFAULT_TOR_DIR=""
@@ -88,6 +96,10 @@ DEFAULT_PSIPHON_HTTP=""
 DEFAULT_PSIPHON_CONFIG=""
 DEFAULT_PSIPHON_CDN_IPS=""
 DEFAULT_PSIPHON_CDN_SNI=""
+DEFAULT_PSIPHON_CDN_SETS=""
+DEFAULT_PSIPHON_SERVER_ENTRIES=""
+DEFAULT_PSIPHON_DIR=""
+DEFAULT_PSIPHON_BIN=""
 DEFAULT_EXIT_LOC=""
 DEFAULT_EXIT_LOC_SECS=""
 DEFAULT_STATS=1
@@ -140,9 +152,13 @@ load_config() {
   FRAGMENT_DELAY="${AETHER_CFG_FRAGMENT_DELAY:-$DEFAULT_FRAGMENT_DELAY}"
   NO_QUIC_V2="${AETHER_CFG_NO_QUIC_V2:-$DEFAULT_NO_QUIC_V2}"
   ECH="${AETHER_CFG_ECH:-$DEFAULT_ECH}"
+  ECH_DNS="${AETHER_CFG_ECH_DNS:-$DEFAULT_ECH_DNS}"
+  ECH_DOMAIN="${AETHER_CFG_ECH_DOMAIN:-$DEFAULT_ECH_DOMAIN}"
   NO_DATA_CHECK="${AETHER_CFG_NO_DATA_CHECK:-$DEFAULT_NO_DATA_CHECK}"
   KEEPALIVE="${AETHER_CFG_KEEPALIVE:-$DEFAULT_KEEPALIVE}"
   PEER="${AETHER_CFG_PEER:-$DEFAULT_PEER}"
+  GOOL_PEER="${AETHER_CFG_GOOL_PEER:-$DEFAULT_GOOL_PEER}"
+  API_FRAGMENT="${AETHER_CFG_API_FRAGMENT:-$DEFAULT_API_FRAGMENT}"
   WIW_OUTER="${AETHER_CFG_WIW_OUTER:-$DEFAULT_WIW_OUTER}"
   WIW_INNER="${AETHER_CFG_WIW_INNER:-$DEFAULT_WIW_INNER}"
   MIM_OUTER="${AETHER_CFG_MIM_OUTER:-$DEFAULT_MIM_OUTER}"
@@ -163,6 +179,10 @@ load_config() {
   RECONNECT_SECS="${AETHER_CFG_RECONNECT_SECS:-$DEFAULT_RECONNECT_SECS}"
   PERF="${AETHER_CFG_PERF:-$DEFAULT_PERF}"
   TLS_GROUPS="${AETHER_CFG_TLS_GROUPS:-$DEFAULT_TLS_GROUPS}"
+  TLS_CIPHERS="${AETHER_CFG_TLS_CIPHERS:-$DEFAULT_TLS_CIPHERS}"
+  DISABLE_GREASE="${AETHER_CFG_DISABLE_GREASE:-$DEFAULT_DISABLE_GREASE}"
+  TLS_VERIFY="${AETHER_CFG_TLS_VERIFY:-$DEFAULT_TLS_VERIFY}"
+  ENROLL_ADDRESS="${AETHER_CFG_ENROLL_ADDRESS:-$DEFAULT_ENROLL_ADDRESS}"
   ROUTES_FILE="${AETHER_CFG_ROUTES_FILE:-$DEFAULT_ROUTES_FILE}"
   TOR_BIND="${AETHER_CFG_TOR_BIND:-$DEFAULT_TOR_BIND}"
   TOR_DIR="${AETHER_CFG_TOR_DIR:-$DEFAULT_TOR_DIR}"
@@ -182,6 +202,10 @@ load_config() {
   PSIPHON_CONFIG="${AETHER_CFG_PSIPHON_CONFIG:-$DEFAULT_PSIPHON_CONFIG}"
   PSIPHON_CDN_IPS="${AETHER_CFG_PSIPHON_CDN_IPS:-$DEFAULT_PSIPHON_CDN_IPS}"
   PSIPHON_CDN_SNI="${AETHER_CFG_PSIPHON_CDN_SNI:-$DEFAULT_PSIPHON_CDN_SNI}"
+  PSIPHON_CDN_SETS="${AETHER_CFG_PSIPHON_CDN_SETS:-$DEFAULT_PSIPHON_CDN_SETS}"
+  PSIPHON_SERVER_ENTRIES="${AETHER_CFG_PSIPHON_SERVER_ENTRIES:-$DEFAULT_PSIPHON_SERVER_ENTRIES}"
+  PSIPHON_DIR="${AETHER_CFG_PSIPHON_DIR:-$DEFAULT_PSIPHON_DIR}"
+  PSIPHON_BIN="${AETHER_CFG_PSIPHON_BIN:-$DEFAULT_PSIPHON_BIN}"
   EXIT_LOC="${AETHER_CFG_EXIT_LOC:-$DEFAULT_EXIT_LOC}"
   EXIT_LOC_SECS="${AETHER_CFG_EXIT_LOC_SECS:-$DEFAULT_EXIT_LOC_SECS}"
   STATS="${AETHER_CFG_STATS:-$DEFAULT_STATS}"
@@ -239,9 +263,13 @@ save_config() {
     printf 'AETHER_CFG_FRAGMENT_DELAY=%q\n' "$FRAGMENT_DELAY"
     printf 'AETHER_CFG_NO_QUIC_V2=%q\n' "$NO_QUIC_V2"
     printf 'AETHER_CFG_ECH=%q\n' "$ECH"
+    printf 'AETHER_CFG_ECH_DNS=%q\n' "$ECH_DNS"
+    printf 'AETHER_CFG_ECH_DOMAIN=%q\n' "$ECH_DOMAIN"
     printf 'AETHER_CFG_NO_DATA_CHECK=%q\n' "$NO_DATA_CHECK"
     printf 'AETHER_CFG_KEEPALIVE=%q\n' "$KEEPALIVE"
     printf 'AETHER_CFG_PEER=%q\n' "$PEER"
+    printf 'AETHER_CFG_GOOL_PEER=%q\n' "$GOOL_PEER"
+    printf 'AETHER_CFG_API_FRAGMENT=%q\n' "$API_FRAGMENT"
     printf 'AETHER_CFG_WIW_OUTER=%q\n' "$WIW_OUTER"
     printf 'AETHER_CFG_WIW_INNER=%q\n' "$WIW_INNER"
     printf 'AETHER_CFG_MIM_OUTER=%q\n' "$MIM_OUTER"
@@ -262,6 +290,10 @@ save_config() {
     printf 'AETHER_CFG_RECONNECT_SECS=%q\n' "$RECONNECT_SECS"
     printf 'AETHER_CFG_PERF=%q\n' "$PERF"
     printf 'AETHER_CFG_TLS_GROUPS=%q\n' "$TLS_GROUPS"
+    printf 'AETHER_CFG_TLS_CIPHERS=%q\n' "$TLS_CIPHERS"
+    printf 'AETHER_CFG_DISABLE_GREASE=%q\n' "$DISABLE_GREASE"
+    printf 'AETHER_CFG_TLS_VERIFY=%q\n' "$TLS_VERIFY"
+    printf 'AETHER_CFG_ENROLL_ADDRESS=%q\n' "$ENROLL_ADDRESS"
     printf 'AETHER_CFG_ROUTES_FILE=%q\n' "$ROUTES_FILE"
     printf 'AETHER_CFG_TOR_BIND=%q\n' "$TOR_BIND"
     printf 'AETHER_CFG_TOR_DIR=%q\n' "$TOR_DIR"
@@ -281,6 +313,10 @@ save_config() {
     printf 'AETHER_CFG_PSIPHON_CONFIG=%q\n' "$PSIPHON_CONFIG"
     printf 'AETHER_CFG_PSIPHON_CDN_IPS=%q\n' "$PSIPHON_CDN_IPS"
     printf 'AETHER_CFG_PSIPHON_CDN_SNI=%q\n' "$PSIPHON_CDN_SNI"
+    printf 'AETHER_CFG_PSIPHON_CDN_SETS=%q\n' "$PSIPHON_CDN_SETS"
+    printf 'AETHER_CFG_PSIPHON_SERVER_ENTRIES=%q\n' "$PSIPHON_SERVER_ENTRIES"
+    printf 'AETHER_CFG_PSIPHON_DIR=%q\n' "$PSIPHON_DIR"
+    printf 'AETHER_CFG_PSIPHON_BIN=%q\n' "$PSIPHON_BIN"
     printf 'AETHER_CFG_EXIT_LOC=%q\n' "$EXIT_LOC"
     printf 'AETHER_CFG_EXIT_LOC_SECS=%q\n' "$EXIT_LOC_SECS"
     printf 'AETHER_CFG_STATS=%q\n' "$STATS"
@@ -387,7 +423,7 @@ get_plugin_version() {
   if [[ -f "$manifest" ]]; then
     sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1
   else
-    echo "1.8.1"
+    echo "1.9.0"
   fi
 }
 
@@ -1456,6 +1492,8 @@ build_args() {
           if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
             args+=("--fragment-delay" "$FRAGMENT_DELAY")
           fi
+        else
+          args+=("--no-fragment")
         fi
       else
         if [[ "$NO_QUIC_V2" == "1" ]]; then
@@ -1464,6 +1502,12 @@ build_args() {
       fi
       if [[ -n "$ECH" && "$ECH" != "off" ]]; then
         args+=("--ech" "$ECH")
+        if [[ -n "$ECH_DNS" ]]; then
+          args+=("--ech-dns" "$ECH_DNS")
+        fi
+        if [[ -n "$ECH_DOMAIN" ]]; then
+          args+=("--ech-domain" "$ECH_DOMAIN")
+        fi
       fi
       if [[ -n "$VALIDATE_SECS" ]]; then
         args+=("--validate-secs" "$VALIDATE_SECS")
@@ -1489,6 +1533,19 @@ build_args() {
       ;;
     gool)
       args+=("--gool")
+      if [[ -n "$GOOL_PEER" ]]; then
+        args+=("--gool-peer" "$GOOL_PEER")
+      fi
+      if [[ -n "$WIW_OUTER" && -n "$WIW_INNER" ]]; then
+        args+=("--wiw-outer" "$WIW_OUTER" "--wiw-inner" "$WIW_INNER")
+      elif [[ -n "$WIW_OUTER" ]]; then
+        args+=("--wiw-outer" "$WIW_OUTER")
+      elif [[ -n "$WIW_INNER" ]]; then
+        args+=("--wiw-inner" "$WIW_INNER")
+      fi
+      ;;
+    gool-classic)
+      args+=("--gool-classic")
       if [[ -n "$WIW_OUTER" && -n "$WIW_INNER" ]]; then
         args+=("--wiw-outer" "$WIW_OUTER" "--wiw-inner" "$WIW_INNER")
       elif [[ -n "$WIW_OUTER" ]]; then
@@ -1501,6 +1558,17 @@ build_args() {
       args+=("--mim")
       if [[ "$H2" == "1" ]]; then
         args+=("--h2")
+        if [[ "$FRAGMENT" == "1" ]]; then
+          args+=("--fragment")
+          if [[ -n "$FRAGMENT_SIZE" && "$FRAGMENT_SIZE" != "$DEFAULT_FRAGMENT_SIZE" ]]; then
+            args+=("--fragment-size" "$FRAGMENT_SIZE")
+          fi
+          if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
+            args+=("--fragment-delay" "$FRAGMENT_DELAY")
+          fi
+        else
+          args+=("--no-fragment")
+        fi
       fi
       if [[ -n "$MIM_OUTER" && -n "$MIM_INNER" ]]; then
         args+=("--mim-outer" "$MIM_OUTER" "--mim-inner" "$MIM_INNER")
@@ -1649,9 +1717,21 @@ build_args() {
     if [[ -n "$PSIPHON_CDN_SNI" ]]; then
       args+=("--psiphon-cdn-sni" "$PSIPHON_CDN_SNI")
     fi
+    if [[ -n "$PSIPHON_CDN_SETS" ]]; then
+      args+=("--psiphon-cdn-sets" "$PSIPHON_CDN_SETS")
+    fi
+    if [[ -n "$PSIPHON_SERVER_ENTRIES" ]]; then
+      args+=("--psiphon-server-entries" "$PSIPHON_SERVER_ENTRIES")
+    fi
+    if [[ -n "$PSIPHON_DIR" ]]; then
+      args+=("--psiphon-dir" "$PSIPHON_DIR")
+    fi
+    if [[ -n "$PSIPHON_BIN" ]]; then
+      args+=("--psiphon-bin" "$PSIPHON_BIN")
+    fi
   fi
 
-  # Exit location restriction (Aether v2.1.0)
+  # Exit location restriction
   if [[ -n "$EXIT_LOC" ]]; then
     args+=("--exit-loc" "$EXIT_LOC")
     if [[ -n "$EXIT_LOC_SECS" ]]; then
@@ -1659,7 +1739,7 @@ build_args() {
     fi
   fi
 
-  # Traffic stats logging (Aether v2.1.0)
+  # Traffic stats logging
   if [[ "$STATS" == "1" ]]; then
     args+=("--stats")
     if [[ -n "$STATS_SECS" ]]; then
@@ -1667,6 +1747,22 @@ build_args() {
     else
       args+=("--stats-secs" "15")
     fi
+  fi
+
+  if [[ "$API_FRAGMENT" == "1" ]]; then
+    args+=("--api-fragment")
+  fi
+  if [[ -n "$TLS_CIPHERS" ]]; then
+    args+=("--tls-ciphers" "$TLS_CIPHERS")
+  fi
+  if [[ "$DISABLE_GREASE" == "1" ]]; then
+    args+=("--disable-grease")
+  fi
+  if [[ "$TLS_VERIFY" == "1" ]]; then
+    args+=("--tls-verify")
+  fi
+  if [[ -n "$ENROLL_ADDRESS" ]]; then
+    args+=("--enroll-address" "$ENROLL_ADDRESS")
   fi
 
   if [[ -n "$TLS_GROUPS" ]]; then
@@ -1931,9 +2027,13 @@ cmd_status() {
   "mark_enabled": $( [[ "$MARK" == "1" ]] && echo "true" || echo "false" ),
   "no_quic_v2": $( [[ "$NO_QUIC_V2" == "1" ]] && echo "true" || echo "false" ),
   "ech": $(json_str "$ECH"),
+  "ech_dns": $(json_str "$ECH_DNS"),
+  "ech_domain": $(json_str "$ECH_DOMAIN"),
   "no_data_check": $( [[ "$NO_DATA_CHECK" == "1" ]] && echo "true" || echo "false" ),
   "keepalive": $(json_num "$KEEPALIVE" 5),
   "peer": $(json_str "$PEER"),
+  "gool_peer": $(json_str "$GOOL_PEER"),
+  "api_fragment": $( [[ "$API_FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
   "wiw_outer": $(json_str "$WIW_OUTER"),
   "wiw_inner": $(json_str "$WIW_INNER"),
   "mim_outer": $(json_str "$MIM_OUTER"),
@@ -1953,6 +2053,10 @@ cmd_status() {
   "reconnect_secs": $(json_str "$RECONNECT_SECS"),
   "perf": $(json_str "$PERF"),
   "tls_groups": $(json_str "$TLS_GROUPS"),
+  "tls_ciphers": $(json_str "$TLS_CIPHERS"),
+  "disable_grease": $( [[ "$DISABLE_GREASE" == "1" ]] && echo "true" || echo "false" ),
+  "tls_verify": $( [[ "$TLS_VERIFY" == "1" ]] && echo "true" || echo "false" ),
+  "enroll_address": $(json_str "$ENROLL_ADDRESS"),
   "routes_file": $(json_str "$ROUTES_FILE"),
   "tor_bind": $(json_str "$TOR_BIND"),
   "tor_http": $(json_str "$TOR_HTTP"),
@@ -1972,6 +2076,10 @@ cmd_status() {
   "psiphon_config": $(json_str "$PSIPHON_CONFIG"),
   "psiphon_cdn_ips": $(json_str "$PSIPHON_CDN_IPS"),
   "psiphon_cdn_sni": $(json_str "$PSIPHON_CDN_SNI"),
+  "psiphon_cdn_sets": $(json_str "$PSIPHON_CDN_SETS"),
+  "psiphon_server_entries": $(json_str "$PSIPHON_SERVER_ENTRIES"),
+  "psiphon_dir": $(json_str "$PSIPHON_DIR"),
+  "psiphon_bin": $(json_str "$PSIPHON_BIN"),
   "exit_loc": $(json_str "$EXIT_LOC"),
   "exit_loc_secs": $(json_str "$EXIT_LOC_SECS"),
   "stats_enabled": $( [[ "$STATS" == "1" ]] && echo "true" || echo "false" ),
@@ -2157,15 +2265,15 @@ cmd_foreground() {  local bin
 # or compromised upstream release cannot silently replace the reviewed core.
 # To upgrade: bump AETHER_CORE_VERSION, re-download the new assets, and
 # replace the hashes with the values from the release's *.sha256 sidecars.
-AETHER_CORE_VERSION="v2.1.0"
+AETHER_CORE_VERSION="v2.3.0"
 # Pinned archives are ~15 MiB; the cap rejects truncated or padded responses.
 AETHER_CORE_MAX_BYTES=$((64 * 1024 * 1024))
 
 core_expected_sha256() {
   case "$1" in
-    aether-linux-x86_64.tar.gz) echo "9d48d83cc6cd1900697636f282b57b530be67f372ddb6ac5056d91475e47b333" ;;
-    aether-linux-arm64.tar.gz)  echo "93bdf51f905884b26abe0b19406039758e776fcfefd74240c5689573506fd911" ;;
-    aether-linux-armv7.tar.gz)  echo "29fe77b02fafaa61df20d225615ace4cc8af92c8aad14734c5f495d33211dcea" ;;
+    aether-linux-x86_64.tar.gz) echo "77c6ce41695a616660d834b55be235c17e7588a474dfd737b71ca80b685bdc8a" ;;
+    aether-linux-arm64.tar.gz)  echo "7251cbb90c4a0eccb62412727ebee9f0a7b775d20d26492c082ba5df64f8c21f" ;;
+    aether-linux-armv7.tar.gz)  echo "c7f41abb99676a866a9ef8fb3d3234e421740161765e6568ae185fa963d76b06" ;;
     *) return 1 ;;
   esac
 }
@@ -2520,6 +2628,8 @@ cmd_set_config() {
       [[ "$val" =~ ^[0-9]+$ ]] || { echo "Error: keepalive must be a non-negative integer." >&2; return 1; }
       KEEPALIVE="$val" ;;
     peer) PEER="$val" ;;
+    gool_peer) GOOL_PEER="$val" ;;
+    api_fragment) API_FRAGMENT="$val" ;;
     wiw_outer) WIW_OUTER="$val" ;;
     wiw_inner) WIW_INNER="$val" ;;
     mim_outer) MIM_OUTER="$val" ;;
@@ -2540,6 +2650,12 @@ cmd_set_config() {
     reconnect_secs) RECONNECT_SECS="$val" ;;
     perf) PERF="$val" ;;
     tls_groups) TLS_GROUPS="$val" ;;
+    tls_ciphers) TLS_CIPHERS="$val" ;;
+    disable_grease) DISABLE_GREASE="$val" ;;
+    tls_verify) TLS_VERIFY="$val" ;;
+    enroll_address) ENROLL_ADDRESS="$val" ;;
+    ech_dns) ECH_DNS="$val" ;;
+    ech_domain) ECH_DOMAIN="$val" ;;
     routes_file) ROUTES_FILE="$val" ;;
     tor_bind) TOR_BIND="$val" ;;
     tor_dir) TOR_DIR="$val" ;;
@@ -2567,6 +2683,10 @@ cmd_set_config() {
     psiphon_config) PSIPHON_CONFIG="$val" ;;
     psiphon_cdn_ips) PSIPHON_CDN_IPS="$val" ;;
     psiphon_cdn_sni) PSIPHON_CDN_SNI="$val" ;;
+    psiphon_cdn_sets) PSIPHON_CDN_SETS="$val" ;;
+    psiphon_server_entries) PSIPHON_SERVER_ENTRIES="$val" ;;
+    psiphon_dir) PSIPHON_DIR="$val" ;;
+    psiphon_bin) PSIPHON_BIN="$val" ;;
     exit_loc) EXIT_LOC="$val" ;;
     exit_loc_secs)
       [[ -z "$val" || "$val" =~ ^[0-9]+$ ]] || { echo "Error: exit_loc_secs must be an integer." >&2; return 1; }
@@ -2735,7 +2855,7 @@ cmd_set_protocol() {
   local h2="${2:-0}"
 
   case "$proto" in
-    masque|wg|gool|mim|tor|tor-reverse|tor-only|psiphon|psiphon-reverse|psiphon-only) ;;
+    masque|wg|gool|gool-classic|mim|tor|tor-reverse|tor-only|psiphon|psiphon-reverse|psiphon-only) ;;
     *) echo "Unknown protocol: $proto" >&2; return 1 ;;
   esac
 

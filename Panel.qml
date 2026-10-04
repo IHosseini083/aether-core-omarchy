@@ -704,14 +704,21 @@ Panel {
 
           Button {
             Layout.fillWidth: true
-            text: "Gool (WARP-in-WARP)"
+            text: "Gool (WG/MASQUE)"
             selected: aether.protocol === "gool"
             onClicked: aether.setConfig("protocol", "gool")
           }
 
           Button {
             Layout.fillWidth: true
-            text: "MIM (MASQUE-in-MASQUE)"
+            text: "Gool Classic (WIW)"
+            selected: aether.protocol === "gool-classic"
+            onClicked: aether.setConfig("protocol", "gool-classic")
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "MIM"
             selected: aether.protocol === "mim"
             onClicked: aether.setConfig("protocol", "mim")
           }
@@ -1470,6 +1477,7 @@ Panel {
 
           AetherField { width: peersGrid.cellWidth; key: "peer"; labelText: "Forced peer (ip:port)" }
           AetherField { width: peersGrid.cellWidth; key: "wg_peer"; labelText: "WireGuard peer (--wg-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "gool_peer"; labelText: "Gool peer (--gool-peer)" }
           AetherField { width: peersGrid.cellWidth; key: "h2_peer"; labelText: "HTTP/2 peer (--h2-peer)" }
           AetherField { width: peersGrid.cellWidth; key: "upstream"; labelText: "Upstream proxy URL" }
           AetherField { width: peersGrid.cellWidth; key: "wiw_outer"; labelText: "WiW outer hop (ip:port)" }
@@ -1493,6 +1501,7 @@ Panel {
           AetherField { width: accessGrid.cellWidth; secret: true; key: "access_secret"; labelText: "Service token secret" }
           AetherField { width: accessGrid.cellWidth; secret: true; key: "access_token"; labelText: "Enrolment token (JWT)" }
           AetherField { width: accessGrid.cellWidth; key: "access_email"; labelText: "Enrolment email" }
+          AetherField { width: accessGrid.cellWidth; key: "enroll_address"; labelText: "Enrollment API host/address" }
         }
 
         Toggle {
@@ -1535,10 +1544,26 @@ Panel {
 
         Toggle {
           width: parent.width
+          label: "API ClientHello Fragmentation"
+          description: "Fragment ClientHello on Zero Trust API calls (--api-fragment)"
+          checked: aether.api_fragment
+          onClicked: aether.setConfig("api_fragment", aether.api_fragment ? "0" : "1")
+        }
+
+        Toggle {
+          width: parent.width
           label: "Encrypted Client Hello (ECH)"
           description: "Enable automated ECH negotiation to hide SNI"
           checked: aether.ech === "auto"
           onClicked: aether.setConfig("ech", aether.ech === "auto" ? "off" : "auto")
+        }
+
+        ResponsiveFormGrid {
+          id: echGrid
+          width: parent.width
+
+          AetherField { width: echGrid.cellWidth; key: "ech_dns"; labelText: "ECH DoH resolver (--ech-dns)" }
+          AetherField { width: echGrid.cellWidth; key: "ech_domain"; labelText: "ECH domain name (--ech-domain)" }
         }
 
         Toggle {
@@ -1549,6 +1574,23 @@ Panel {
           onClicked: aether.setConfig("no_quic_v2", aether.no_quic_v2 ? "0" : "1")
         }
 
+        Toggle {
+          width: parent.width
+          label: "Disable TLS GREASE"
+          description: "Disable GREASE extensions in TLS ClientHello (--disable-grease)"
+          checked: aether.disable_grease
+          onClicked: aether.setConfig("disable_grease", aether.disable_grease ? "0" : "1")
+        }
+
+        Toggle {
+          width: parent.width
+          label: "TLS Certificate Verification"
+          description: "Enforce strict TLS server certificate verification (--tls-verify)"
+          checked: aether.tls_verify
+          onClicked: aether.setConfig("tls_verify", aether.tls_verify ? "0" : "1")
+        }
+
+        AetherField { key: "tls_ciphers"; labelText: "TLS cipher suites (--tls-ciphers)" }
         AetherField { key: "tls_groups"; labelText: "TLS key share groups" }
 
         ResponsiveFormGrid {
@@ -1601,6 +1643,10 @@ Panel {
           AetherField { width: psiphonGrid.cellWidth; key: "psiphon_http"; labelText: "Psiphon HTTP proxy bind address" }
           AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_ips"; labelText: "CDN fronting IP list (comma-separated)" }
           AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sni"; labelText: "CDN fronting SNI names" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sets"; labelText: "CDN sets (--psiphon-cdn-sets)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_server_entries"; labelText: "Server entries file / URL" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_dir"; labelText: "Psiphon state dir (--psiphon-dir)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_bin"; labelText: "Custom psiphon-tunnel-core binary" }
         }
 
         AetherField { key: "psiphon_config"; labelText: "Psiphon custom JSON config file (--psiphon-config)" }

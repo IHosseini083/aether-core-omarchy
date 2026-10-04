@@ -50,7 +50,7 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 
 | Key | Values (default first) | Flag passed to core | In panel UI |
 | --- | --- | --- | --- |
-| `protocol` | `masque`, `wg`, `gool`, `mim`, `tor`, `tor-reverse`, `tor-only`, `psiphon`, `psiphon-reverse`, `psiphon-only` | `--masque` / `--wg` / `--gool` / `--mim` / `--tor` / `--tor-reverse` / `--tor-only` / `--psiphon` / `--psiphon-reverse` / `--psiphon-only` | ✓ Transport + Tor + Psiphon |
+| `protocol` | `masque`, `wg`, `gool`, `gool-classic`, `mim`, `tor`, `tor-reverse`, `tor-only`, `psiphon`, `psiphon-reverse`, `psiphon-only` | `--masque` / `--wg` / `--gool` / `--gool-classic` / `--mim` / `--tor` / `--tor-reverse` / `--tor-only` / `--psiphon` / `--psiphon-reverse` / `--psiphon-only` | ✓ Transport + Tor + Psiphon |
 | `h2` | `0` (HTTP/3), `1` (HTTP/2) | `--h2` | ✓ Transport |
 | `scan` | `balanced`, `turbo`, `verified`, `thorough`, `ironclad` | `--scan <mode>` | ✓ Scan mode |
 | `noize` | `firewall`, `gfw`, `aggressive`, `balanced`, `light`, `off` | `--noize <profile>` | ✓ Noize |
@@ -58,15 +58,19 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `socks_port` | `1819` | `--bind 127.0.0.1:<port>` | ✓ Advanced |
 | `http_proxy_port` | `0` (off), port | `--http-proxy` | ✓ Advanced |
 | `quick_reconnect` | `1`, `0` | `--quick-reconnect` / `--no-quick-reconnect` | ✓ |
-| `fragment` | `0`, `1` | `--fragment` (h2 only) | ✓ |
+| `fragment` | `1`, `0` | `--fragment` / `--no-fragment` (default-on in v2.3.0) | ✓ |
 | `fragment_size` | `16-32` | `--fragment-size` | ✓ Advanced |
 | `fragment_delay` | `2-10` | `--fragment-delay` | ✓ Advanced |
+| `api_fragment` | `0`, `1` | `--api-fragment` | ✓ Circumvention |
 | `ech` | `off`, `auto`, or base64 config | `--ech <value>` | ✓ |
+| `ech_dns` | empty | `--ech-dns <url>` | ✓ Circumvention |
+| `ech_domain` | empty | `--ech-domain <domain>` | ✓ Circumvention |
 | `no_quic_v2` | `0` (opener on), `1` | `--no-quic-v2` | ✓ (inverted as "QUIC v2 Opener") |
 | `no_data_check` | `0`, `1` | `--no-data-check` | ✓ |
 | `keepalive` | `5` | `--keepalive` (wg) | ✓ Advanced |
 | `peer` | empty | `--peer <ip:port>` | ✓ Advanced |
 | `wg_peer` | empty | `--wg-peer <ip:port>` | ✓ Advanced |
+| `gool_peer` | empty | `--gool-peer <ip:port>` | ✓ Advanced |
 | `h2_peer` | empty | `--h2-peer <ip:port>` | ✓ Advanced |
 | `no_profile_retry` | `0`, `1` | `--no-profile-retry` (wg) | ✓ Advanced |
 | `wiw_outer` / `wiw_inner` | empty | `--wiw-outer` / `--wiw-inner` | ✓ Advanced |
@@ -79,7 +83,11 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `access_token` | empty | `AETHER_ACCESS_TOKEN` (runtime env) | ✓ Advanced |
 | `access_id` / `access_secret` | empty | `AETHER_ACCESS_CLIENT_ID` / `AETHER_ACCESS_CLIENT_SECRET` (runtime env) | ✓ Advanced |
 | `access_email` | empty | `AETHER_ACCESS_EMAIL` (runtime env) | ✓ Advanced |
+| `enroll_address` | empty | `--enroll-address <host>` | ✓ Advanced |
 | `gateway` | `0`, `1` | `--gateway` (with `team`) | ✓ Advanced |
+| `tls_ciphers` | empty | `--tls-ciphers <list>` | ✓ Circumvention |
+| `disable_grease` | `0`, `1` | `--disable-grease` | ✓ Circumvention |
+| `tls_verify` | `0`, `1` | `--tls-verify` | ✓ Circumvention |
 | `tor_bind` / `tor_dir` | empty | `--tor-bind` / `--tor-dir` | ✓ Advanced |
 | `tor_http` | empty | `--tor-http` | ✓ Advanced |
 | `tor_bridges` | empty (auto), `on`, `off` | `--tor-bridges` / `--no-tor-bridges` | ✓ Advanced |
@@ -96,6 +104,10 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `psiphon_config` | empty | `--psiphon-config <path>` | ✓ Advanced |
 | `psiphon_cdn_ips` | empty | `--psiphon-cdn-ips <list>` | ✓ Advanced |
 | `psiphon_cdn_sni` | empty | `--psiphon-cdn-sni <list>` | ✓ Advanced |
+| `psiphon_cdn_sets` | empty | `--psiphon-cdn-sets <urls>` | ✓ Advanced |
+| `psiphon_server_entries` | empty | `--psiphon-server-entries <path>` | ✓ Advanced |
+| `psiphon_dir` | empty | `--psiphon-dir <path>` | ✓ Advanced |
+| `psiphon_bin` | empty | `--psiphon-bin <path>` | ✓ Advanced |
 | `exit_loc` | empty | `--exit-loc <spec>` | ✓ Advanced + Tunnel |
 | `exit_loc_secs` | empty (60) | `--exit-loc-secs <n>` | ✓ Advanced |
 | `stats` | `0` (off), `1` | `--stats` | ✓ Advanced + Tunnel |
@@ -140,23 +152,24 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 ```json
 {
-  "plugin_version": "1.8.1", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.1.0",
-  "core_pinned_version": "v2.1.0", "core_update_available": false,
+  "plugin_version": "1.9.0", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.3.0",
+  "core_pinned_version": "v2.3.0", "core_update_available": false,
   "has_cap_net_admin": false, "running": true, "pid": "1234", "connected": true,
   "ip": "104.28.x.x", "colo": "FRA", "loc": "IR", "warp": "on", "latency_ms": 1091,
   "proxy_port": 1819, "http_proxy_port": 0,
   "protocol": "masque", "scan": "balanced", "noize": "firewall", "ip_mode": "v4",
   "h2": false, "fragment": true, "quick_reconnect": true, "mark_enabled": false,
-  "no_quic_v2": false, "ech": "off", "no_data_check": false, "keepalive": 5,
-  "peer": "", "wiw_outer": "", "wiw_inner": "", "mim_outer": "", "mim_inner": "",
+  "no_quic_v2": false, "ech": "off", "ech_dns": "", "ech_domain": "", "no_data_check": false, "keepalive": 5,
+  "peer": "", "gool_peer": "", "api_fragment": false,
+  "wiw_outer": "", "wiw_inner": "", "mim_outer": "", "mim_inner": "",
   "dns": "", "team": "", "upstream": "", "route_direct": "", "route_block": "",
   "log_level": "info", "wg_peer": "", "h2_peer": "", "no_profile_retry": false,
   "validate_secs": "", "startup_secs": "", "reconnect_secs": "", "perf": "",
-  "tls_groups": "", "routes_file": "",
+  "tls_groups": "", "tls_ciphers": "", "disable_grease": false, "tls_verify": false, "enroll_address": "", "routes_file": "",
   "tor_bind": "", "tor_http": "", "tor_dir": "", "tor_bridges": "", "tor_bridge": "",
   "tor_bridge_file": "", "tor_relays": "", "tor_relay_ports": "", "tor_pt": "", "tor_pt_dir": "", "tor_country": "",
   "psiphon_mode": "auto", "psiphon_region": "", "psiphon_bind": "", "psiphon_http": "",
-  "psiphon_config": "", "psiphon_cdn_ips": "", "psiphon_cdn_sni": "",
+  "psiphon_config": "", "psiphon_cdn_ips": "", "psiphon_cdn_sni": "", "psiphon_cdn_sets": "", "psiphon_server_entries": "", "psiphon_dir": "", "psiphon_bin": "",
   "exit_loc": "", "exit_loc_secs": "", "stats_enabled": false, "stats_secs": "",
   "access_id": "", "access_secret": "", "access_token": "", "has_access_id": false, "has_access_secret": false, "has_access_token": false, "access_email": "",
   "discovered_cores": ["/path/to/aether"],
@@ -177,7 +190,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
 }
 ```
 
-`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.1.0** flag set.
+`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.3.0** flag set.
 
 ### Core remove
 

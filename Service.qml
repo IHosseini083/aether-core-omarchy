@@ -8,7 +8,7 @@ Item {
   id: root
 
   // Core status
-  property string pluginVersion: "1.8.1"
+  property string pluginVersion: "1.9.0"
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""
@@ -43,14 +43,18 @@ Item {
   property string noize: "firewall"
   property string ip_mode: "v4"
   property bool h2: false
-  property bool fragment: false
+  property bool fragment: true
   property bool quick_reconnect: true
   property bool mark_enabled: false
   property bool no_quic_v2: false
   property string ech: "off"
+  property string ech_dns: ""
+  property string ech_domain: ""
   property bool no_data_check: false
   property int keepalive: 5
   property string peer: ""
+  property string gool_peer: ""
+  property bool api_fragment: false
   property string wiw_outer: ""
   property string wiw_inner: ""
   property string mim_outer: ""
@@ -70,6 +74,10 @@ Item {
   property string reconnect_secs: ""
   property string perf: ""
   property string tls_groups: ""
+  property string tls_ciphers: ""
+  property bool disable_grease: false
+  property bool tls_verify: false
+  property string enroll_address: ""
   property string routes_file: ""
   property string tor_bind: ""
   property string tor_http: ""
@@ -89,6 +97,10 @@ Item {
   property string psiphon_config: ""
   property string psiphon_cdn_ips: ""
   property string psiphon_cdn_sni: ""
+  property string psiphon_cdn_sets: ""
+  property string psiphon_server_entries: ""
+  property string psiphon_dir: ""
+  property string psiphon_bin: ""
   property string exit_loc: ""
   property string exit_loc_secs: ""
   property bool stats_enabled: false
@@ -416,9 +428,13 @@ Item {
         root.mark_enabled = data.mark_enabled
         root.no_quic_v2 = data.no_quic_v2
         root.ech = data.ech
+        root.ech_dns = data.ech_dns
+        root.ech_domain = data.ech_domain
         root.no_data_check = data.no_data_check
         root.keepalive = data.keepalive
         root.peer = data.peer
+        root.gool_peer = data.gool_peer
+        root.api_fragment = data.api_fragment
         root.wiw_outer = data.wiw_outer
         root.wiw_inner = data.wiw_inner
         root.mim_outer = data.mim_outer
@@ -438,6 +454,10 @@ Item {
         root.reconnect_secs = data.reconnect_secs
         root.perf = data.perf
         root.tls_groups = data.tls_groups
+        root.tls_ciphers = data.tls_ciphers
+        root.disable_grease = data.disable_grease
+        root.tls_verify = data.tls_verify
+        root.enroll_address = data.enroll_address
         root.routes_file = data.routes_file
         root.tor_bind = data.tor_bind
         root.tor_http = data.tor_http
@@ -457,6 +477,10 @@ Item {
         root.psiphon_config = data.psiphon_config
         root.psiphon_cdn_ips = data.psiphon_cdn_ips
         root.psiphon_cdn_sni = data.psiphon_cdn_sni
+        root.psiphon_cdn_sets = data.psiphon_cdn_sets
+        root.psiphon_server_entries = data.psiphon_server_entries
+        root.psiphon_dir = data.psiphon_dir
+        root.psiphon_bin = data.psiphon_bin
         root.exit_loc = data.exit_loc
         root.exit_loc_secs = data.exit_loc_secs
         root.stats_enabled = data.stats_enabled

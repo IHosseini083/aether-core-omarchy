@@ -27,10 +27,10 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 
 - Gateway (Cloudflare colo + country), round-trip latency, WARP exit IP, local SOCKS5 address, exit location filter status, and traffic stats.
 - One-click connect/disconnect.
-- Transport presets: **MASQUE** (HTTP/3), **MASQUE HTTP/2**, **WireGuard**, **Gool** (WARP-in-WARP), **MIM** (MASQUE-in-MASQUE), **Psiphon** (v2.1), **Tor** (v2.1).
+- Transport presets: **MASQUE** (HTTP/3), **MASQUE HTTP/2**, **WireGuard**, **Gool** (WireGuard in MASQUE), **Gool Classic** (WireGuard in WireGuard), **MIM** (MASQUE-in-MASQUE), **Psiphon**, **Tor**.
 - First-class inline controls for **Psiphon** (WARP → Psiphon, Psiphon → WARP, Standalone Psiphon, quick region presets) and **Tor** (WARP → Tor, Tor → WARP, Standalone Tor, Onionoo relays).
 - Exit location guard card with quick country restriction presets (`Worldwide`, `!IR,AZ,RU`, `DE,SE,NL`, `US`).
-- Scan mode covering `balanced`, `turbo`, **`verified`** (v2.1 measured connect-ip edges), `thorough`, and `ironclad`.
+- Scan mode covering `balanced`, `turbo`, **`verified`** (measured connect-ip edges), `thorough`, and `ironclad`.
 - Obfuscation (noize) profile selectors covering all upstream values.
 - One-click copy of SOCKS5 / HTTP URLs, `all_proxy` exports, `curl` test command, and gateway cache clearing.
 
@@ -38,14 +38,14 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 
 - Shows the active core binary, its version, and `CAP_NET_ADMIN` status.
 - Switch between every Aether core discovered on your system, or download the pinned, checksum-verified official release from GitHub with one click.
-- IP version (IPv4 / IPv6 / dual), quick reconnect, TLS ClientHello fragmentation, Encrypted Client Hello, QUIC v2 opener, data-plane probe skip, firewall mark.
+- IP version (IPv4 / IPv6 / dual), quick reconnect, TLS ClientHello fragmentation (default-on in v2.3.0), API ClientHello fragmentation (`--api-fragment`), Encrypted Client Hello with custom DoH resolver & domain (`--ech-dns`, `--ech-domain`), QUIC v2 opener, data-plane probe skip, firewall mark.
 - **Advanced section** — every remaining Aether CLI flag has a control here:
-  - **Psiphon Circumvention**: mode (`auto`, `cdn` fronted meek, `direct`), egress region, bind/HTTP ports, custom CDN IPs/SNI, custom JSON config.
+  - **Psiphon Circumvention**: mode (`auto`, `cdn` fronted meek, `direct`), egress region, bind/HTTP ports, custom CDN IPs/SNI, CDN sets (`--psiphon-cdn-sets`), server entries file/URL (`--psiphon-server-entries`), custom directory (`--psiphon-dir`), custom binary (`--psiphon-bin`), custom JSON config.
   - **Tor Network**: protocol mode, Onionoo relays (`auto`, `only`, `off`), relay ports (`web`, `any`), bridge file, custom bridge line, bind/HTTP ports, pluggable transports (`pt/lyrebird`).
   - **Exit Location & Traffic Stats**: `--exit-loc`, `--exit-loc-secs`, periodic traffic bandwidth & uptime logging (`--stats`, `--stats-secs`).
-  - **Static Peers & Endpoints**: forced peers (`--peer`, `--wg-peer`, `--h2-peer`), WARP-in-WARP and MASQUE-in-MASQUE endpoints, upstream proxy chaining.
-  - **Network & Zero Trust**: tunnel resolvers, routes file, routing block/direct lists, Zero Trust enrolment (team, service tokens, e-mail, gateway).
-  - **Timing, TLS & Logging**: validation/startup/reconnect timing, WireGuard keepalive, TLS groups, resource profile, log level, and verbatim extra-arguments escape hatch.
+  - **Static Peers & Endpoints**: forced peers (`--peer`, `--wg-peer`, `--gool-peer`, `--h2-peer`), WireGuard-in-WireGuard and MASQUE-in-MASQUE endpoints, upstream proxy chaining.
+  - **Network & Zero Trust**: tunnel resolvers, routes file, routing block/direct lists, Zero Trust enrolment (team, service tokens, e-mail, gateway, `--enroll-address`).
+  - **Timing, TLS & Logging**: validation/startup/reconnect timing, WireGuard keepalive, TLS groups, TLS cipher suites (`--tls-ciphers`), disable GREASE (`--disable-grease`), TLS certificate verification (`--tls-verify`), resource profile, log level, and verbatim extra-arguments escape hatch.
 
 **Popup panel — Live Logs tab**
 
@@ -107,7 +107,7 @@ If the bar widget doesn't pick up the change immediately, restart the Omarchy sh
 
 ## Core
 
-The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core 2.1.0**.
+The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core 2.3.0**.
 
 **Where the plugin looks for a core** (first match wins; each candidate is verified by running it with `--help` and checking for SOCKS5 output, so the unrelated `aether` theme tool is never mistaken for the core):
 

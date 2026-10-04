@@ -20,7 +20,7 @@ function getHeroPhrase(index) {
 
 function parseStatus(rawJson) {
   var defaultState = {
-    plugin_version: "1.8.1",
+    plugin_version: "1.9.0",
     installed: false,
     binary: "",
     binary_version: "",
@@ -45,7 +45,7 @@ function parseStatus(rawJson) {
     noize: "firewall",
     ip_mode: "v4",
     h2: false,
-    fragment: false,
+    fragment: true,
     fragment_size: "16-32",
     fragment_delay: "2-10",
     extra_args: "",
@@ -53,9 +53,13 @@ function parseStatus(rawJson) {
     mark_enabled: false,
     no_quic_v2: false,
     ech: "off",
+    ech_dns: "",
+    ech_domain: "",
     no_data_check: false,
     keepalive: 5,
     peer: "",
+    gool_peer: "",
+    api_fragment: false,
     wiw_outer: "",
     wiw_inner: "",
     mim_outer: "",
@@ -75,6 +79,10 @@ function parseStatus(rawJson) {
     reconnect_secs: "",
     perf: "",
     tls_groups: "",
+    tls_ciphers: "",
+    disable_grease: false,
+    tls_verify: false,
+    enroll_address: "",
     routes_file: "",
     tor_bind: "",
     tor_http: "",
@@ -94,6 +102,10 @@ function parseStatus(rawJson) {
     psiphon_config: "",
     psiphon_cdn_ips: "",
     psiphon_cdn_sni: "",
+    psiphon_cdn_sets: "",
+    psiphon_server_entries: "",
+    psiphon_dir: "",
+    psiphon_bin: "",
     exit_loc: "",
     exit_loc_secs: "",
     stats_enabled: false,
@@ -149,7 +161,7 @@ function parseStatus(rawJson) {
   try {
     var parsed = JSON.parse(rawJson);
     return {
-      plugin_version: String(parsed.plugin_version || "1.8.1"),
+      plugin_version: String(parsed.plugin_version || "1.9.0"),
       installed: parsed.installed === true,
       binary: String(parsed.binary || ""),
       binary_version: String(parsed.binary_version || ""),
@@ -182,9 +194,13 @@ function parseStatus(rawJson) {
       mark_enabled: parsed.mark_enabled === true,
       no_quic_v2: parsed.no_quic_v2 === true,
       ech: String(parsed.ech || "off"),
+      ech_dns: String(parsed.ech_dns || ""),
+      ech_domain: String(parsed.ech_domain || ""),
       no_data_check: parsed.no_data_check === true,
       keepalive: Number(parsed.keepalive) || 5,
       peer: String(parsed.peer || ""),
+      gool_peer: String(parsed.gool_peer || ""),
+      api_fragment: parsed.api_fragment === true,
       wiw_outer: String(parsed.wiw_outer || ""),
       wiw_inner: String(parsed.wiw_inner || ""),
       mim_outer: String(parsed.mim_outer || ""),
@@ -204,6 +220,10 @@ function parseStatus(rawJson) {
       reconnect_secs: String(parsed.reconnect_secs || ""),
       perf: String(parsed.perf || ""),
       tls_groups: String(parsed.tls_groups || ""),
+      tls_ciphers: String(parsed.tls_ciphers || ""),
+      disable_grease: parsed.disable_grease === true,
+      tls_verify: parsed.tls_verify === true,
+      enroll_address: String(parsed.enroll_address || ""),
       routes_file: String(parsed.routes_file || ""),
       tor_bind: String(parsed.tor_bind || ""),
       tor_http: String(parsed.tor_http || ""),
@@ -223,6 +243,10 @@ function parseStatus(rawJson) {
       psiphon_config: String(parsed.psiphon_config || ""),
       psiphon_cdn_ips: String(parsed.psiphon_cdn_ips || ""),
       psiphon_cdn_sni: String(parsed.psiphon_cdn_sni || ""),
+      psiphon_cdn_sets: String(parsed.psiphon_cdn_sets || ""),
+      psiphon_server_entries: String(parsed.psiphon_server_entries || ""),
+      psiphon_dir: String(parsed.psiphon_dir || ""),
+      psiphon_bin: String(parsed.psiphon_bin || ""),
       exit_loc: String(parsed.exit_loc || ""),
       exit_loc_secs: String(parsed.exit_loc_secs || ""),
       stats_enabled: parsed.stats_enabled === true,
@@ -329,6 +353,7 @@ function protocolCategory(proto) {
   if (isPsiphon(proto)) return "psiphon";
   if (proto === "wg") return "wg";
   if (proto === "gool") return "gool";
+  if (proto === "gool-classic") return "gool-classic";
   if (proto === "mim") return "mim";
   return "masque";
 }
@@ -337,7 +362,8 @@ function protocolLabel(proto, h2) {
   switch (proto) {
     case "masque": return h2 ? "MASQUE (HTTP/2)" : "MASQUE (QUIC)";
     case "wg": return "WireGuard";
-    case "gool": return "WARP-in-WARP";
+    case "gool": return "Gool (WG in MASQUE)";
+    case "gool-classic": return "Gool Classic (WIW)";
     case "mim": return h2 ? "MIM (HTTP/2)" : "MIM (QUIC)";
     case "tor": return "WARP → Tor";
     case "tor-reverse": return "Tor → WARP";
