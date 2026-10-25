@@ -8,7 +8,7 @@ Item {
   id: root
 
   // Core status
-  property string pluginVersion: "1.9.0"
+  property string pluginVersion: "2.0.0"
   property bool installed: false
   property string binary: ""
   property string binaryVersion: ""
@@ -33,7 +33,7 @@ Item {
   property int httpProxyPort: 0
   property int socks_port: 1819
   property int http_proxy_port: 0
-  property string fragment_size: "16-32"
+  property string fragment_size: "8-16"
   property string fragment_delay: "2-10"
   property string extra_args: ""
 
@@ -43,9 +43,10 @@ Item {
   property string noize: "firewall"
   property string ip_mode: "v4"
   property bool h2: false
-  property bool fragment: true
+  property bool fragment: false
   property bool quick_reconnect: true
   property bool mark_enabled: false
+  readonly property alias mark: root.mark_enabled
   property bool no_quic_v2: false
   property string ech: "off"
   property string ech_dns: ""
@@ -75,9 +76,26 @@ Item {
   property string perf: ""
   property string tls_groups: ""
   property string tls_ciphers: ""
+  property string tls13_ciphers: ""
+  property string tls_key_shares: ""
+  property string tls_sigalgs: ""
+  property bool enable_grease_sigalgs: false
+  property string tls_cert_compression: ""
+  property string tls_alps: ""
+  property string tls_trust_anchors: ""
+  property string tls_server_padding: ""
+  property bool enable_ech_grease: false
+  property bool disable_ocsp_stapling: false
+  property bool disable_sct: false
+  property bool disable_session_ticket: false
+  property bool disable_extension_permutation: false
   property bool disable_grease: false
-  property bool tls_verify: false
+  property string tls_verify: "auto"
+  property string api_address: ""
   property string enroll_address: ""
+  property string api_host: ""
+  property string api_sni: ""
+  property string masque_sni: ""
   property string routes_file: ""
   property string tor_bind: ""
   property string tor_http: ""
@@ -104,6 +122,7 @@ Item {
   property string exit_loc: ""
   property string exit_loc_secs: ""
   property bool stats_enabled: false
+  readonly property alias stats: root.stats_enabled
   property string stats_secs: ""
   property string access_id: ""
   property string access_secret: ""
@@ -148,8 +167,9 @@ Item {
   property string sysroute_log_level: "warn"
   property string sysroute_egress: ""
   property string sysroute_egress_kind: "warp"
+  property string sysroute_tor_psiphon_warning: ""
 
-  // Logs & Operations
+  // Logs & Diagnostics & Operations
   property string logsText: ""
   property string logsHtml: ""
   property string zeptunLogsText: ""
@@ -163,6 +183,13 @@ Item {
   property string actionStatus: ""
   property string lastError: ""
   property int phraseIndex: 0
+
+  // Diagnostics & Command Preview
+  property string commandPreview: ""
+  property bool commandRunning: false
+  property string doctorOutput: ""
+  property bool doctorRunning: false
+  property var doctorData: null
 
   readonly property string ctlPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl"
   readonly property string heroPhrase: Model.getHeroPhrase(phraseIndex)
@@ -260,6 +287,42 @@ Item {
 
   function setConfig(key, value) {
     runAction(["set", key, String(value)], "Applying " + key + "…")
+  }
+
+  function resetConfig(key) {
+    runAction(["reset", String(key)], "Resetting " + key + "…")
+  }
+
+  function resetAllConfig() {
+    runAction(["reset", "all"], "Resetting all settings to defaults…")
+  }
+
+  function applyPreset(presetId) {
+    runAction(["preset", String(presetId)], "Applying preset " + presetId + "…")
+  }
+
+  function fetchCommandPreview() {
+    if (commandProcess.running) return
+    commandRunning = true
+    _commandOutput = ""
+    commandProcess.command = [ctlPath, "command"]
+    commandProcess.running = true
+  }
+
+  function runDoctor() {
+    if (doctorProcess.running) return
+    doctorRunning = true
+    _doctorOutput = ""
+    doctorProcess.command = [ctlPath, "doctor"]
+    doctorProcess.running = true
+  }
+
+  function exportConfig(filePath) {
+    runAction(["export", String(filePath)], "Exporting configuration…")
+  }
+
+  function importConfig(filePath) {
+    runAction(["import", String(filePath)], "Importing configuration…")
   }
 
   // Atomic protocol switch: one ctl invocation, no dropped updates
@@ -380,6 +443,8 @@ Item {
   property string _zeptunLogsOutput: ""
   property string _actionOutput: ""
   property string _installOutput: ""
+  property string _commandOutput: ""
+  property string _doctorOutput: ""
 
   Process {
     id: statusProcess
@@ -455,9 +520,26 @@ Item {
         root.perf = data.perf
         root.tls_groups = data.tls_groups
         root.tls_ciphers = data.tls_ciphers
+        root.tls13_ciphers = data.tls13_ciphers
+        root.tls_key_shares = data.tls_key_shares
+        root.tls_sigalgs = data.tls_sigalgs
+        root.enable_grease_sigalgs = data.enable_grease_sigalgs
+        root.tls_cert_compression = data.tls_cert_compression
+        root.tls_alps = data.tls_alps
+        root.tls_trust_anchors = data.tls_trust_anchors
+        root.tls_server_padding = data.tls_server_padding
+        root.enable_ech_grease = data.enable_ech_grease
+        root.disable_ocsp_stapling = data.disable_ocsp_stapling
+        root.disable_sct = data.disable_sct
+        root.disable_session_ticket = data.disable_session_ticket
+        root.disable_extension_permutation = data.disable_extension_permutation
         root.disable_grease = data.disable_grease
         root.tls_verify = data.tls_verify
+        root.api_address = data.api_address
         root.enroll_address = data.enroll_address
+        root.api_host = data.api_host
+        root.api_sni = data.api_sni
+        root.masque_sni = data.masque_sni
         root.routes_file = data.routes_file
         root.tor_bind = data.tor_bind
         root.tor_http = data.tor_http
@@ -526,6 +608,7 @@ Item {
         root.sysroute_log_level = data.sysroute_log_level
         root.sysroute_egress = data.sysroute_egress
         root.sysroute_egress_kind = data.sysroute_egress_kind
+        root.sysroute_tor_psiphon_warning = data.sysroute_tor_psiphon_warning
       }
     }
   }
@@ -640,8 +723,39 @@ Item {
     onTriggered: root.actionStatus = ""
   }
 
+  Process {
+    id: commandProcess
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._commandOutput += line + "\n"
+      }
+    }
+    onExited: function(code) {
+      root.commandRunning = false
+      if (code === 0) {
+        root.commandPreview = root._commandOutput.trim()
+      }
+    }
+  }
+
+  Process {
+    id: doctorProcess
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._doctorOutput += line + "\n"
+      }
+    }
+    onExited: function(code) {
+      root.doctorRunning = false
+      if (code === 0 && root._doctorOutput.length > 0) {
+        root.doctorOutput = root._doctorOutput.trim()
+      }
+    }
+  }
+
   Component.onCompleted: {
     refresh()
     fetchLogs()
+    fetchCommandPreview()
   }
 }

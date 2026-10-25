@@ -15,10 +15,55 @@ Panel {
   manageIpc: false
 
   property string currentTab: "controls" // "controls" | "settings" | "routing" | "logs"
-  property string settingsCategory: "all" // "all" | "core" | "network" | "circumvention" | "advanced"
+  property string settingsCategory: "all" // "all" | "core" | "network" | "tls" | "circumvention" | "routing" | "zerotrust"
+  property bool showAdvancedSettings: false
+  property string settingsSearchQuery: ""
+  property bool confirmResetAll: false
+  property string logsSubTab: "core" // "core" | "zeptun" | "doctor"
   property bool customExitExpanded: false
   property string pendingRemovePath: ""
   property string pendingRemoveZeptunPath: ""
+  property string pendingImportPath: ""
+
+  function isFieldVisible(key, category, isAdvanced) {
+    if (!root.showAdvancedSettings && isAdvanced) return false
+    var item = Model.getSchemaItem(key)
+    if (!item) return false
+
+    if (root.settingsCategory === "modified") {
+      var val = Model.getSettingValue(aether, key)
+      var hasSec = aether["has_" + key]
+      if (!Model.isSettingModified(key, val, hasSec)) return false
+    } else if (root.settingsCategory !== "all" && root.settingsCategory !== category) {
+      return false
+    }
+
+    if (root.settingsSearchQuery === "") return true
+    return Model.matchesQuery(item, root.settingsSearchQuery)
+  }
+
+  function isCategoryVisible(category) {
+    if (root.settingsCategory !== "all" && root.settingsCategory !== "modified" && root.settingsCategory !== category) return false
+    if (root.settingsCategory === "modified") {
+      var modItems = Model.filterSchema("", category, root.showAdvancedSettings, true, aether)
+      return modItems.length > 0
+    }
+    if (root.settingsSearchQuery === "") return true
+    var items = Model.filterSchema(root.settingsSearchQuery, category, root.showAdvancedSettings, false, aether)
+    return items.length > 0
+  }
+
+  function isSectionVisible(keys) {
+    if (!keys || keys.length === 0) return true
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i]
+      var item = Model.getSchemaItem(k)
+      var isAdv = item ? (item.level === "advanced") : false
+      var cat = item ? item.category : "core"
+      if (root.isFieldVisible(k, cat, isAdv)) return true
+    }
+    return false
+  }
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -67,7 +112,7 @@ Panel {
     function tab(t: string): string {
       // Settings categories live under the "settings" tab; only real tab
       // names may be assigned to currentTab.
-      const categories = ["core", "network", "circumvention", "advanced"]
+      const categories = ["core", "network", "tls", "circumvention", "routing", "zerotrust", "advanced"]
       if (t === "cores" || categories.includes(t)) {
         root.currentTab = "settings"
         root.settingsCategory = t === "cores" ? "core" : t
@@ -372,6 +417,38 @@ Panel {
           root.pendingRemoveZeptunPath = ""
         }
       }
+
+      ConfirmDialog {
+        anchors.fill: parent
+        opened: root.confirmResetAll
+        message: "Reset all Aether configuration settings to default values?\nAny custom configuration will be cleared."
+        confirmText: "Reset All"
+        background: Color.background
+        foreground: root.foreground
+        selectedText: root.urgent
+        fontFamily: root.fontFamily
+        onCanceled: root.confirmResetAll = false
+        onConfirmed: {
+          aether.resetAllConfig()
+          root.confirmResetAll = false
+        }
+      }
+
+      ConfirmDialog {
+        anchors.fill: parent
+        opened: root.pendingImportPath !== ""
+        message: "Import configuration from:\n" + root.pendingImportPath + "\n\nThis will replace all current settings and reload the service."
+        confirmText: "Import"
+        background: Color.background
+        foreground: root.foreground
+        selectedText: root.accent
+        fontFamily: root.fontFamily
+        onCanceled: root.pendingImportPath = ""
+        onConfirmed: {
+          aether.importConfig(root.pendingImportPath)
+          root.pendingImportPath = ""
+        }
+      }
     }
   }
 
@@ -397,9 +474,12 @@ Panel {
     property string labelText: ""
     property string hintText: ""
     property bool secret: false
+    property bool isAdvanced: false
+    property string category: "core"
     readonly property bool isConfigured: secret ? Boolean(aether["has_" + key]) : (current !== "")
     readonly property string current: key !== "" && aether[key] !== undefined ? String(aether[key]) : ""
 
+    visible: root.isFieldVisible(key, category, isAdvanced)
     width: parent.width
     spacing: Style.space(4)
 
@@ -414,6 +494,18 @@ Panel {
         font.bold: true
         color: root.dim
         font.family: root.fontFamily
+      }
+      Text {
+        visible: !af.secret && af.key !== "" && Model.isSettingModified(af.key, af.current, false)
+        text: "Reset"
+        font.pixelSize: Style.font.caption
+        color: root.accent
+        font.family: root.fontFamily
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: aether.resetConfig(af.key)
+        }
       }
       Text {
         visible: af.secret && af.isConfigured
@@ -470,11 +562,24 @@ Panel {
 
   component AetherDropdown: Dropdown {
     property string key: ""
+    property bool isAdvanced: false
+    property string category: "core"
+    property bool filterWithSettings: true
+    visible: filterWithSettings ? root.isFieldVisible(key, category, isAdvanced) : true
     width: parent.width
     foreground: root.foreground
     accent: root.accent
     fontFamily: root.fontFamily
     onChanged: function(v) { if (v !== aether[key]) aether.setConfig(key, v) }
+  }
+
+  component AetherToggle: Toggle {
+    property string key: ""
+    property bool isAdvanced: false
+    property string category: "core"
+    property bool filterWithSettings: true
+    visible: filterWithSettings ? root.isFieldVisible(key, category, isAdvanced) : true
+    width: parent.width
   }
 
   // -------------------------------------------------------------
@@ -1046,6 +1151,7 @@ Panel {
       // Scan Profile
       AetherDropdown {
         key: "scan"
+        filterWithSettings: false
         label: "SCAN MODE"
         value: aether.scan
         options: [
@@ -1060,6 +1166,7 @@ Panel {
       // Obfuscation / Noize
       AetherDropdown {
         key: "noize"
+        filterWithSettings: false
         label: "NOIZE / OBFUSCATION"
         value: aether.noize
         options: [
@@ -1096,6 +1203,17 @@ Panel {
           text: "Clear Cache"
           onClicked: aether.clearCache()
         }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Doctor"
+          onClicked: {
+            root.currentTab = "logs"
+            root.logsSubTab = "doctor"
+            aether.runDoctor()
+            aether.fetchCommandPreview()
+          }
+        }
       }
     }
   }
@@ -1110,10 +1228,153 @@ Panel {
       width: parent.width
       spacing: Style.space(12)
 
-      // Category Pill Navigation
+      // ---------------------------------------------------------
+      // Configuration Profiles & Presets
+      // ---------------------------------------------------------
+      BorderSurface {
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
+        implicitHeight: presetCol.implicitHeight + Style.space(16)
+
+        Column {
+          id: presetCol
+          width: parent.width - Style.space(20)
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Text {
+              text: "CONFIGURATION PROFILE"
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.dim
+              font.family: root.fontFamily
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+              readonly property string activeId: Model.detectActivePreset(aether)
+              readonly property int modCount: Model.countModifiedSettings(aether)
+              text: activeId !== "" ? ("Active: " + (Model.PRESETS[activeId] ? Model.PRESETS[activeId].name : activeId))
+                                    : (modCount > 0 ? ("Custom (" + modCount + " modified)") : "Default")
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: activeId !== "" ? root.accent : (modCount > 0 ? root.foreground : root.dim)
+              font.family: root.fontFamily
+            }
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(4)
+
+            readonly property string activePreset: Model.detectActivePreset(aether)
+
+            Button {
+              Layout.fillWidth: true
+              text: "Default"
+              selected: parent.activePreset === "default"
+              onClicked: aether.applyPreset("default")
+            }
+            Button {
+              Layout.fillWidth: true
+              text: "Stealth"
+              selected: parent.activePreset === "stealth"
+              onClicked: aether.applyPreset("stealth")
+            }
+            Button {
+              Layout.fillWidth: true
+              text: "Speed"
+              selected: parent.activePreset === "speed"
+              onClicked: aether.applyPreset("speed")
+            }
+            Button {
+              Layout.fillWidth: true
+              text: "Tor"
+              selected: parent.activePreset === "tor_multihop"
+              onClicked: aether.applyPreset("tor_multihop")
+            }
+            Button {
+              Layout.fillWidth: true
+              text: "Psiphon"
+              selected: parent.activePreset === "psiphon_bypass"
+              onClicked: aether.applyPreset("psiphon_bypass")
+            }
+          }
+
+          Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: Model.getPresetDescription(Model.detectActivePreset(aether))
+            font.pixelSize: Style.font.caption
+            color: root.dim
+            font.family: root.fontFamily
+          }
+        }
+      }
+
+      // ---------------------------------------------------------
+      // Search & Filter Controls
+      // ---------------------------------------------------------
+      RowLayout {
+        width: parent.width
+        spacing: Style.space(6)
+
+        TextField {
+          id: searchInput
+          Layout.fillWidth: true
+          placeholderText: "Search 97 settings (e.g. fragment, tls, dns, ech)…"
+          text: root.settingsSearchQuery
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          foreground: root.foreground
+          accent: root.accent
+          onTextChanged: root.settingsSearchQuery = text
+        }
+
+        Button {
+          visible: root.settingsSearchQuery !== ""
+          text: "Clear"
+          onClicked: {
+            root.settingsSearchQuery = ""
+            searchInput.text = ""
+          }
+        }
+      }
+
       RowLayout {
         width: parent.width
         spacing: Style.space(4)
+
+        Button {
+          Layout.fillWidth: true
+          text: root.showAdvancedSettings ? "Mode: Advanced (All 97 Settings)" : "Mode: Basic (Essential Settings)"
+          selected: root.showAdvancedSettings
+          onClicked: root.showAdvancedSettings = !root.showAdvancedSettings
+        }
+
+        Button {
+          readonly property int modCount: Model.countModifiedSettings(aether)
+          text: "Reset All"
+          accent: root.urgent
+          enabled: modCount > 0
+          onClicked: root.confirmResetAll = true
+        }
+      }
+
+      // Category Navigation Grid (2 rows x 4 columns, balanced alignment)
+      GridLayout {
+        width: parent.width
+        columns: 4
+        rowSpacing: Style.space(4)
+        columnSpacing: Style.space(4)
+
+        readonly property int modCount: Model.countModifiedSettings(aether)
 
         Button {
           Layout.fillWidth: true
@@ -1138,6 +1399,13 @@ Panel {
 
         Button {
           Layout.fillWidth: true
+          text: "TLS 1.3"
+          selected: root.settingsCategory === "tls"
+          onClicked: root.settingsCategory = "tls"
+        }
+
+        Button {
+          Layout.fillWidth: true
           text: "Bypass"
           selected: root.settingsCategory === "circumvention"
           onClicked: root.settingsCategory = "circumvention"
@@ -1145,19 +1413,62 @@ Panel {
 
         Button {
           Layout.fillWidth: true
-          text: "Advanced"
-          selected: root.settingsCategory === "advanced"
-          onClicked: root.settingsCategory = "advanced"
+          text: "Routing"
+          selected: root.settingsCategory === "routing"
+          onClicked: root.settingsCategory = "routing"
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: "Zero Trust"
+          selected: root.settingsCategory === "zerotrust"
+          onClicked: root.settingsCategory = "zerotrust"
+        }
+
+        Button {
+          Layout.fillWidth: true
+          text: parent.modCount > 0 ? ("Modified (" + parent.modCount + ")") : "Modified"
+          selected: root.settingsCategory === "modified"
+          accent: parent.modCount > 0 ? root.accent : root.foreground
+          onClicked: root.settingsCategory = "modified"
+        }
+      }
+
+      // Empty State for Search or Modified filter
+      BorderSurface {
+        visible: (root.settingsSearchQuery !== "" || root.settingsCategory === "modified") && Model.filterSchema(root.settingsSearchQuery, root.settingsCategory, root.showAdvancedSettings, root.settingsCategory === "modified", aether).length === 0
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
+        implicitHeight: Style.space(64)
+
+        Column {
+          anchors.centerIn: parent
+          spacing: Style.space(4)
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: root.settingsCategory === "modified" ? "No settings have been modified from default" : ("No settings match \"" + root.settingsSearchQuery + "\"")
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            color: root.dim
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: root.settingsCategory === "modified" ? "All options are currently using factory defaults." : (root.showAdvancedSettings ? "Try another keyword or clear search." : "Try switching to Advanced Mode to view all 97 settings.")
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            color: root.dim
+          }
         }
       }
 
       // =========================================================
-      // CATEGORY: CORE
+      // CATEGORY: CORE & ENGINE
       // =========================================================
       Column {
         width: parent.width
         spacing: Style.space(10)
-        visible: root.settingsCategory === "all" || root.settingsCategory === "core"
+        visible: root.isCategoryVisible("core")
 
         PanelSectionHeader {
           text: "ACTIVE CORE"
@@ -1331,12 +1642,558 @@ Panel {
         PanelSeparator { width: parent.width }
 
         PanelSectionHeader {
-          text: "ROUTING ENGINE (ZEPTUN)"
+          visible: root.isSectionVisible(["scan", "noize", "h2", "perf", "log_level", "quick_reconnect", "no_data_check", "no_profile_retry", "mark"])
+          text: "SYSTEM & ENGINE PROFILES"
+          foreground: root.foreground
+        }
+
+        AetherDropdown {
+          key: "scan"
+          category: "core"
+          label: "SCAN STRATEGY"
+          value: aether.scan
+          options: [
+            { value: "balanced", label: "Balanced — collect a few, keep fastest (default)" },
+            { value: "turbo", label: "Turbo — first responder wins" },
+            { value: "verified", label: "Verified — measured connect-ip edges" },
+            { value: "thorough", label: "Thorough — sweep entire subnet ranges" },
+            { value: "ironclad", label: "Ironclad — live data-plane verified" }
+          ]
+        }
+
+        AetherDropdown {
+          key: "noize"
+          category: "core"
+          label: "NOIZE / OBFUSCATION PROFILE"
+          value: aether.noize
+          options: [
+            { value: "firewall", label: "Firewall — default for MASQUE" },
+            { value: "balanced", label: "Balanced — default for WireGuard" },
+            { value: "light", label: "Light — subtle packet shaping" },
+            { value: "gfw", label: "GFW — hardened against deep inspection" },
+            { value: "aggressive", label: "Aggressive — maximum packet padding" },
+            { value: "off", label: "Off — standard packet stream" }
+          ]
+        }
+
+        AetherToggle {
+          key: "h2"
+          category: "core"
+          label: "MASQUE over HTTP/2"
+          description: "Use TCP HTTP/2 instead of QUIC (useful when UDP is blocked by ISP)"
+          checked: aether.h2
+          onClicked: aether.setConfig("h2", aether.h2 ? "0" : "1")
+        }
+
+        AetherDropdown {
+          key: "perf"
+          category: "core"
+          isAdvanced: true
+          label: "RESOURCE PROFILE"
+          value: aether.perf
+          options: [
+            { value: "", label: "Auto-detect from CPU / RAM" },
+            { value: "low", label: "Low — routers, small boards" },
+            { value: "medium", label: "Medium — typical desktop" },
+            { value: "high", label: "High — servers" }
+          ]
+        }
+
+        AetherDropdown {
+          key: "log_level"
+          category: "core"
+          label: "LOG LEVEL"
+          value: aether.log_level
+          options: ["error", "warn", "info", "debug", "trace"]
+        }
+
+        AetherToggle {
+          key: "quick_reconnect"
+          category: "core"
+          label: "Quick Reconnect"
+          description: "Fast-resume connection using the last verified gateway"
+          checked: aether.quick_reconnect
+          onClicked: aether.setConfig("quick_reconnect", aether.quick_reconnect ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "no_data_check"
+          category: "core"
+          isAdvanced: true
+          label: "Skip Data-Plane Probe"
+          description: "Skip HTTP probe verification (connects faster but less resilient)"
+          checked: aether.no_data_check
+          onClicked: aether.setConfig("no_data_check", aether.no_data_check ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "no_profile_retry"
+          category: "core"
+          isAdvanced: true
+          label: "No Obfuscation Profile Retry"
+          description: "Do not retry other noise/padding profiles if connection fails"
+          checked: aether.no_profile_retry
+          onClicked: aether.setConfig("no_profile_retry", aether.no_profile_retry ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "mark"
+          category: "core"
+          isAdvanced: true
+          label: "Firewall Mark (SO_MARK 0xff)"
+          description: "Attach mark for router / transparent tun2socks bypass (requires CAP_NET_ADMIN)"
+          checked: aether.mark_enabled
+          onClicked: aether.setConfig("mark", aether.mark_enabled ? "0" : "1")
+        }
+
+        ResponsiveFormGrid {
+          id: coreTimingGrid
+          width: parent.width
+
+          AetherField { width: coreTimingGrid.cellWidth; key: "keepalive"; category: "core"; isAdvanced: true; labelText: "WireGuard keepalive (s)" }
+          AetherField { width: coreTimingGrid.cellWidth; key: "validate_secs"; category: "core"; isAdvanced: true; labelText: "Data-plane validate (s)" }
+          AetherField { width: coreTimingGrid.cellWidth; key: "startup_secs"; category: "core"; isAdvanced: true; labelText: "MASQUE startup deadline (s)" }
+          AetherField { width: coreTimingGrid.cellWidth; key: "reconnect_secs"; category: "core"; isAdvanced: true; labelText: "Reconnect delay (s)" }
+        }
+
+        AetherField {
+          key: "extra_args"
+          category: "core"
+          isAdvanced: true
+          labelText: "Extra core arguments (verbatim)"
+          hintText: "Appended as-is to core CLI arguments, split on spaces (e.g. --verbose or --ironclad-port 80)."
+        }
+      }
+
+      // =========================================================
+      // CATEGORY: NETWORK & PORTS
+      // =========================================================
+      Column {
+        width: parent.width
+        spacing: Style.space(10)
+        visible: root.isCategoryVisible("network")
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["ip"])
+          text: "IP VERSION"
+          foreground: root.foreground
+        }
+
+        RowLayout {
+          visible: root.isSectionVisible(["ip"])
+          width: parent.width
+          spacing: Style.space(6)
+
+          Button {
+            Layout.fillWidth: true
+            text: "IPv4"
+            selected: aether.ip_mode === "v4"
+            onClicked: aether.setConfig("ip", "v4")
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "IPv6"
+            selected: aether.ip_mode === "v6"
+            onClicked: aether.setConfig("ip", "v6")
+          }
+
+          Button {
+            Layout.fillWidth: true
+            text: "Dual Stack"
+            selected: aether.ip_mode === "dual"
+            onClicked: aether.setConfig("ip", "dual")
+          }
+        }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["socks_port", "http_proxy_port", "dns", "upstream", "routes_file"])
+          text: "PORTS & RESOLVERS"
+          foreground: root.dim
+        }
+
+        ResponsiveFormGrid {
+          id: portsPair
+          width: parent.width
+
+          AetherField { width: portsPair.cellWidth; key: "socks_port"; category: "network"; labelText: "SOCKS5 port" }
+          AetherField { width: portsPair.cellWidth; key: "http_proxy_port"; category: "network"; labelText: "HTTP CONNECT port (0 = off)" }
+        }
+
+        AetherField { key: "dns"; category: "network"; labelText: "Tunnel resolvers" }
+        AetherField {
+          key: "upstream"
+          category: "network"
+          isAdvanced: true
+          labelText: "Upstream proxy URL"
+          hintText: "e.g. socks5://127.0.0.1:9050. Non-zero port required."
+        }
+        AetherField { key: "routes_file"; category: "network"; isAdvanced: true; labelText: "Routes file (--routes)" }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["route_block", "route_direct"])
+          text: "ROUTING RULES & BYPASS"
+          foreground: root.dim
+        }
+
+        AetherField { key: "route_block"; category: "network"; isAdvanced: true; labelText: "Route block list (domains, CIDRs, port:, private)" }
+        AetherField { key: "route_direct"; category: "network"; isAdvanced: true; labelText: "Route direct list (bypasses the tunnel)" }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["peer", "wg_peer", "gool_peer", "h2_peer", "wiw_outer", "wiw_inner", "mim_outer", "mim_inner"])
+          text: "STATIC PEERS & ENDPOINTS"
+          foreground: root.dim
+        }
+
+        ResponsiveFormGrid {
+          id: peersGrid
+          width: parent.width
+
+          AetherField { width: peersGrid.cellWidth; key: "peer"; category: "network"; isAdvanced: true; labelText: "Forced peer (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "wg_peer"; category: "network"; isAdvanced: true; labelText: "WireGuard peer (--wg-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "gool_peer"; category: "network"; isAdvanced: true; labelText: "Gool peer (--gool-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "h2_peer"; category: "network"; isAdvanced: true; labelText: "HTTP/2 peer (--h2-peer)" }
+          AetherField { width: peersGrid.cellWidth; key: "wiw_outer"; category: "network"; isAdvanced: true; labelText: "WiW outer hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "wiw_inner"; category: "network"; isAdvanced: true; labelText: "WiW inner hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "mim_outer"; category: "network"; isAdvanced: true; labelText: "MIM outer hop (ip:port)" }
+          AetherField { width: peersGrid.cellWidth; key: "mim_inner"; category: "network"; isAdvanced: true; labelText: "MIM inner hop (ip:port)" }
+        }
+      }
+
+      // =========================================================
+      // CATEGORY: TLS 1.3 & FINGERPRINT EVASION (Aether Core v2.4.0)
+      // =========================================================
+      Column {
+        width: parent.width
+        spacing: Style.space(10)
+        visible: root.isCategoryVisible("tls")
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["fragment", "fragment_size", "fragment_delay", "ech", "ech_dns", "ech_domain", "enable_ech_grease"])
+          text: "TLS 1.3 CLIENTHELLO FRAGMENTATION & ECH"
+          foreground: root.foreground
+        }
+
+        AetherToggle {
+          key: "fragment"
+          category: "tls"
+          label: "ClientHello Fragmentation"
+          description: "Fragment ClientHello across records to bypass deep packet inspection (DPI)"
+          checked: aether.fragment
+          onClicked: aether.setConfig("fragment", aether.fragment ? "0" : "1")
+        }
+
+        ResponsiveFormGrid {
+          id: fragPair
+          width: parent.width
+
+          AetherField { width: fragPair.cellWidth; key: "fragment_size"; category: "tls"; labelText: "Fragment size (bytes, default 8-16)" }
+          AetherField { width: fragPair.cellWidth; key: "fragment_delay"; category: "tls"; labelText: "Fragment delay (ms, default 2-10)" }
+        }
+
+        AetherDropdown {
+          key: "ech"
+          category: "tls"
+          label: "ENCRYPTED CLIENT HELLO (ECH)"
+          value: aether.ech
+          options: [
+            { value: "off", label: "Off — standard unencrypted SNI" },
+            { value: "auto", label: "Auto — negotiate ECH via DoH / DNS" }
+          ]
+        }
+
+        ResponsiveFormGrid {
+          id: echGrid
+          width: parent.width
+
+          AetherField { width: echGrid.cellWidth; key: "ech_dns"; category: "tls"; isAdvanced: true; labelText: "ECH DoH resolver URL" }
+          AetherField { width: echGrid.cellWidth; key: "ech_domain"; category: "tls"; isAdvanced: true; labelText: "ECH outer domain SNI" }
+        }
+
+        AetherToggle {
+          key: "enable_ech_grease"
+          category: "tls"
+          isAdvanced: true
+          label: "Enable ECH GREASE"
+          description: "Send synthetic ECH GREASE extension when real ECH is not used"
+          checked: aether.enable_ech_grease
+          onClicked: aether.setConfig("enable_ech_grease", aether.enable_ech_grease ? "0" : "1")
+        }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["tls_verify", "tls13_ciphers", "tls_ciphers", "tls_groups", "tls_key_shares", "tls_sigalgs", "tls_server_padding", "tls_cert_compression", "tls_alps", "enable_grease_sigalgs", "disable_grease", "disable_ocsp_stapling", "disable_sct", "disable_session_ticket", "disable_extension_permutation"])
+          text: "CIPHERS & SIGNATURE SUITES (v2.4.0)"
+          foreground: root.dim
+        }
+
+        AetherDropdown {
+          key: "tls_verify"
+          category: "tls"
+          isAdvanced: true
+          label: "TLS CERTIFICATE VERIFICATION"
+          value: aether.tls_verify
+          options: [
+            { value: "auto", label: "Auto — required for Zero Trust, optional for WARP" },
+            { value: "1", label: "Strict — enforce certificate verification on all connections" },
+            { value: "0", label: "Disabled — allow unverified / self-signed upstream certs" }
+          ]
+        }
+
+        AetherField { key: "tls13_ciphers"; category: "tls"; isAdvanced: true; labelText: "TLS 1.3 ciphers (--tls13-ciphers)" }
+        AetherField { key: "tls_ciphers"; category: "tls"; isAdvanced: true; labelText: "TLS 1.2 ciphers (--tls-ciphers)" }
+
+        ResponsiveFormGrid {
+          id: tlsCurveGrid
+          width: parent.width
+
+          AetherField { width: tlsCurveGrid.cellWidth; key: "tls_groups"; category: "tls"; isAdvanced: true; labelText: "TLS curve groups (e.g. X25519:P-256)" }
+          AetherField { width: tlsCurveGrid.cellWidth; key: "tls_key_shares"; category: "tls"; isAdvanced: true; labelText: "TLS key shares (e.g. X25519)" }
+          AetherField { width: tlsCurveGrid.cellWidth; key: "tls_sigalgs"; category: "tls"; isAdvanced: true; labelText: "TLS signature algorithms" }
+          AetherField { width: tlsCurveGrid.cellWidth; key: "tls_server_padding"; category: "tls"; isAdvanced: true; labelText: "Server name padding (bytes)" }
+        }
+
+        ResponsiveFormGrid {
+          id: tlsAlpsGrid
+          width: parent.width
+
+          AetherField { width: tlsAlpsGrid.cellWidth; key: "tls_cert_compression"; category: "tls"; isAdvanced: true; labelText: "Cert compression (brotli/zstd)" }
+          AetherDropdown {
+            width: tlsAlpsGrid.cellWidth
+            key: "tls_alps"
+            category: "tls"
+            isAdvanced: true
+            label: "ALPS DRAFT"
+            value: aether.tls_alps
+            options: [
+              { value: "", label: "Default — BoringSSL automatic" },
+              { value: "new", label: "New draft" },
+              { value: "old", label: "Legacy draft" }
+            ]
+          }
+        }
+
+        AetherToggle {
+          key: "enable_grease_sigalgs"
+          category: "tls"
+          isAdvanced: true
+          label: "GREASE Signature Algorithms"
+          description: "Inject GREASE into signature algorithms extension"
+          checked: aether.enable_grease_sigalgs
+          onClicked: aether.setConfig("enable_grease_sigalgs", aether.enable_grease_sigalgs ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "disable_grease"
+          category: "tls"
+          isAdvanced: true
+          label: "Disable TLS GREASE"
+          description: "Omit all GREASE extensions from ClientHello"
+          checked: aether.disable_grease
+          onClicked: aether.setConfig("disable_grease", aether.disable_grease ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "disable_ocsp_stapling"
+          category: "tls"
+          isAdvanced: true
+          label: "Disable OCSP Stapling"
+          description: "Do not request OCSP stapled status"
+          checked: aether.disable_ocsp_stapling
+          onClicked: aether.setConfig("disable_ocsp_stapling", aether.disable_ocsp_stapling ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "disable_sct"
+          category: "tls"
+          isAdvanced: true
+          label: "Disable Signed Cert Timestamps"
+          description: "Do not request Certificate Transparency SCTs"
+          checked: aether.disable_sct
+          onClicked: aether.setConfig("disable_sct", aether.disable_sct ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "disable_session_ticket"
+          category: "tls"
+          isAdvanced: true
+          label: "Disable Session Resumption Tickets"
+          description: "Omit session resumption ticket extension"
+          checked: aether.disable_session_ticket
+          onClicked: aether.setConfig("disable_session_ticket", aether.disable_session_ticket ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "disable_extension_permutation"
+          category: "tls"
+          isAdvanced: true
+          label: "Disable Extension Permutation"
+          description: "Preserve fixed order of TLS extensions instead of randomizing order"
+          checked: aether.disable_extension_permutation
+          onClicked: aether.setConfig("disable_extension_permutation", aether.disable_extension_permutation ? "0" : "1")
+        }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["api_address", "api_host", "api_sni", "masque_sni"])
+          text: "WARP API & GATEWAY SNI"
+          foreground: root.dim
+        }
+
+        ResponsiveFormGrid {
+          id: warpApiGrid
+          width: parent.width
+
+          AetherField { width: warpApiGrid.cellWidth; key: "api_address"; category: "tls"; isAdvanced: true; labelText: "WARP API endpoint (ip:port)" }
+          AetherField { width: warpApiGrid.cellWidth; key: "api_host"; category: "tls"; isAdvanced: true; labelText: "WARP API Host header" }
+          AetherField { width: warpApiGrid.cellWidth; key: "api_sni"; category: "tls"; isAdvanced: true; labelText: "WARP API TLS SNI" }
+          AetherField { width: warpApiGrid.cellWidth; key: "masque_sni"; category: "tls"; isAdvanced: true; labelText: "MASQUE gateway SNI" }
+        }
+      }
+
+      // =========================================================
+      // CATEGORY: CIRCUMVENTION (TOR & PSIPHON)
+      // =========================================================
+      Column {
+        width: parent.width
+        spacing: Style.space(10)
+        visible: root.isCategoryVisible("circumvention")
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["psiphon_mode", "psiphon_region", "psiphon_bind", "psiphon_http", "psiphon_cdn_ips", "psiphon_cdn_sni", "psiphon_config"])
+          text: "PSIPHON CIRCUMVENTION (V2.1)"
+          foreground: root.foreground
+        }
+
+        Dropdown {
+          visible: root.isSectionVisible(["psiphon_mode", "psiphon_region", "psiphon_bind", "psiphon_http", "psiphon_cdn_ips", "psiphon_cdn_sni", "psiphon_config"])
+          width: parent.width
+          label: "PSIPHON PROTOCOL MODE"
+          value: root.psiphonMode(aether.protocol)
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          options: [
+            { value: "off", label: "Disabled (use primary protocol)" },
+            { value: "psiphon", label: "WARP → Psiphon (carry Psiphon inside tunnel)" },
+            { value: "psiphon-reverse", label: "Psiphon → WARP (dial tunnel through Psiphon)" },
+            { value: "psiphon-only", label: "Psiphon only — standalone proxy without WARP" }
+          ]
+          onChanged: function(v) { aether.setConfig("protocol", v === "off" ? "masque" : v) }
+        }
+
+        AetherDropdown {
+          key: "psiphon_mode"
+          category: "circumvention"
+          label: "PSIPHON TRANSPORT MODE"
+          value: aether.psiphon_mode
+          options: [
+            { value: "auto", label: "Auto — let Psiphon pick best egress" },
+            { value: "cdn", label: "CDN — fronted meek through CDN only (firewall bypass)" },
+            { value: "direct", label: "Direct — direct egress without CDN fronting" }
+          ]
+        }
+
+        AetherField { key: "psiphon_region"; category: "circumvention"; labelText: "Psiphon egress country code (e.g. DE, US, NL, CH)" }
+
+        ResponsiveFormGrid {
+          id: psiphonGrid
+          width: parent.width
+
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_bind"; category: "circumvention"; isAdvanced: true; labelText: "Psiphon SOCKS5 bind (default 127.0.0.1:1821)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_http"; category: "circumvention"; isAdvanced: true; labelText: "Psiphon HTTP proxy bind address" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_ips"; category: "circumvention"; isAdvanced: true; labelText: "CDN fronting IP list (comma-separated)" }
+          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sni"; category: "circumvention"; isAdvanced: true; labelText: "CDN fronting SNI names" }
+        }
+
+        AetherField { key: "psiphon_config"; category: "circumvention"; isAdvanced: true; labelText: "Psiphon custom JSON config file (--psiphon-config)" }
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["tor_relays", "tor_relay_ports", "tor_bridges", "tor_bind", "tor_http", "tor_country", "tor_bridge_file", "tor_bridge", "tor_pt"])
+          text: "TOR ONION NETWORK (V2.1)"
+          foreground: root.foreground
+        }
+
+        Dropdown {
+          visible: root.isSectionVisible(["tor_relays", "tor_relay_ports", "tor_bridges", "tor_bind", "tor_http", "tor_country", "tor_bridge_file", "tor_bridge", "tor_pt"])
+          width: parent.width
+          label: "TOR MODE"
+          value: root.torMode(aether.protocol)
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          options: [
+            { value: "off", label: "Disabled" },
+            { value: "tor", label: "Carry Tor inside the tunnel" },
+            { value: "tor-reverse", label: "Dial the tunnel through Tor" },
+            { value: "tor-only", label: "Tor only — no WARP tunnel" }
+          ]
+          onChanged: function(v) { aether.setConfig("protocol", v === "off" ? "masque" : v) }
+        }
+
+        AetherDropdown {
+          key: "tor_relays"
+          category: "circumvention"
+          label: "TOR ONIONOO RELAYS"
+          value: aether.tor_relays !== "" ? aether.tor_relays : "auto"
+          options: [
+            { value: "auto", label: "Auto — Onionoo relays alongside BridgeDB (recommended)" },
+            { value: "only", label: "Only — use Onionoo relays exclusively as bridges" },
+            { value: "off", label: "Off — BridgeDB bridges only" }
+          ]
+        }
+
+        AetherDropdown {
+          key: "tor_relay_ports"
+          category: "circumvention"
+          label: "TOR RELAY PORTS"
+          value: aether.tor_relay_ports !== "" ? aether.tor_relay_ports : "web"
+          options: [
+            { value: "web", label: "Web ports only (80 and 443 — firewall stealth)" },
+            { value: "any", label: "Any ports — all running relay ports" }
+          ]
+        }
+
+        AetherDropdown {
+          key: "tor_bridges"
+          category: "circumvention"
+          label: "TOR BRIDGES"
+          value: aether.tor_bridges
+          options: [
+            { value: "", label: "Auto — try plain Tor, fall back to bridges" },
+            { value: "on", label: "Always use bridges" },
+            { value: "off", label: "Never use bridges" }
+          ]
+        }
+
+        ResponsiveFormGrid {
+          id: torGrid
+          width: parent.width
+
+          AetherField { width: torGrid.cellWidth; key: "tor_bind"; category: "circumvention"; isAdvanced: true; labelText: "Tor proxy bind address" }
+          AetherField { width: torGrid.cellWidth; key: "tor_http"; category: "circumvention"; isAdvanced: true; labelText: "Tor HTTP proxy address (--tor-http)" }
+          AetherField { width: torGrid.cellWidth; key: "tor_country"; category: "circumvention"; labelText: "Bridge country (e.g. ir)" }
+          AetherField { width: torGrid.cellWidth; key: "tor_bridge_file"; category: "circumvention"; isAdvanced: true; labelText: "Tor bridge list file (--tor-bridge-file)" }
+        }
+
+        AetherField { key: "tor_bridge"; category: "circumvention"; isAdvanced: true; labelText: "Custom bridge line (obfs4 1.2.3.4:443 …)" }
+        AetherField { key: "tor_pt"; category: "circumvention"; isAdvanced: true; labelText: "Pluggable transport binary ([name=]/path)" }
+      }
+
+      // =========================================================
+      // CATEGORY: SYSTEM ROUTING (ZEPTUN TUN)
+      // =========================================================
+      Column {
+        width: parent.width
+        spacing: Style.space(10)
+        visible: root.isCategoryVisible("routing")
+
+        PanelSectionHeader {
+          visible: root.isSectionVisible(["sysroute_enabled", "sysroute_preset", "sysroute_mtu", "sysroute_dns_mode", "sysroute_dns_servers", "sysroute_fake_ip", "sysroute_dns_hijack", "sysroute_strict_route", "sysroute_auto_redirect", "sysroute_exclude", "sysroute_exclude_uids", "sysroute_persistent"])
+          text: "ZEPTUN TUN ENGINE"
           foreground: root.foreground
         }
 
         BorderSurface {
-          visible: aether.zeptun_available
+          visible: root.isSectionVisible(["sysroute_enabled", "sysroute_preset", "sysroute_mtu", "sysroute_dns_mode", "sysroute_dns_servers", "sysroute_fake_ip", "sysroute_dns_hijack", "sysroute_strict_route", "sysroute_auto_redirect", "sysroute_exclude", "sysroute_exclude_uids", "sysroute_persistent"]) && aether.zeptun_available
           width: parent.width
           radius: Style.cornerRadius
           implicitHeight: Style.space(40)
@@ -1367,7 +2224,7 @@ Panel {
         }
 
         Button {
-          visible: !aether.zeptun_available
+          visible: root.isSectionVisible(["sysroute_enabled", "sysroute_preset", "sysroute_mtu", "sysroute_dns_mode", "sysroute_dns_servers", "sysroute_fake_ip", "sysroute_dns_hijack", "sysroute_strict_route", "sysroute_auto_redirect", "sysroute_exclude", "sysroute_exclude_uids", "sysroute_persistent"]) && !aether.zeptun_available
           width: parent.width
           text: aether.installing ? "Downloading Zeptun…" : "Download & Install Zeptun"
           enabled: !aether.installing
@@ -1376,421 +2233,219 @@ Panel {
           onClicked: aether.runAction(["zeptun-install"], "Downloading Zeptun…")
         }
 
-        PanelSeparator { width: parent.width }
-
-        PanelSectionHeader {
-          text: "SYSTEM & ENGINE PROFILES"
-          foreground: root.foreground
+        AetherToggle {
+          key: "sysroute_enabled"
+          category: "routing"
+          label: "System-Wide TUN Routing"
+          description: "Route all OS network traffic transparently through Aether"
+          checked: aether.sysroute_enabled
+          onClicked: aether.setConfig("sysroute_enabled", aether.sysroute_enabled ? "0" : "1")
         }
 
         AetherDropdown {
-          key: "perf"
-          label: "RESOURCE PROFILE"
-          value: aether.perf
+          key: "sysroute_preset"
+          category: "routing"
+          label: "ROUTING NETWORK PROFILE"
+          value: aether.sysroute_preset
           options: [
-            { value: "", label: "Auto-detect from CPU / RAM" },
-            { value: "low", label: "Low — routers, small boards" },
-            { value: "medium", label: "Medium — typical desktop" },
-            { value: "high", label: "High — servers" }
+            { value: "desktop", label: "Desktop — standard MTU 1500, full offload" },
+            { value: "mobile", label: "Mobile — battery-conscious, MTU 1420" },
+            { value: "server", label: "Server — maximum throughput, minimal logs" }
           ]
         }
 
-        AetherDropdown {
-          key: "log_level"
-          label: "LOG LEVEL"
-          value: aether.log_level
-          options: ["error", "warn", "info", "debug", "trace"]
+        ResponsiveFormGrid {
+          id: sysrouteGrid
+          width: parent.width
+
+          AetherField { width: sysrouteGrid.cellWidth; key: "sysroute_mtu"; category: "routing"; labelText: "TUN device MTU (default 1500)" }
+          AetherDropdown {
+            width: sysrouteGrid.cellWidth
+            key: "sysroute_dns_mode"
+            category: "routing"
+            label: "DNS MODE"
+            value: aether.sysroute_dns_mode
+            options: [
+              { value: "systemd_resolved", label: "systemd-resolved" },
+              { value: "hijack", label: "Direct hijack" },
+              { value: "off", label: "Off" }
+            ]
+          }
+        }
+
+        AetherField { key: "sysroute_dns_servers"; category: "routing"; labelText: "In-tunnel DNS servers" }
+
+        AetherToggle {
+          key: "sysroute_fake_ip"
+          category: "routing"
+          label: "Fake-IP Address Pool"
+          description: "Remote SOCKS5 DNS resolution (eliminates ISP leaks, recommended for Tor/Psiphon)"
+          checked: aether.sysroute_fake_ip
+          onClicked: aether.setConfig("sysroute_fake_ip", aether.sysroute_fake_ip ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "sysroute_dns_hijack"
+          category: "routing"
+          isAdvanced: true
+          label: "Hijack Outbound Port 53"
+          description: "Capture all port 53 DNS queries to any IP"
+          checked: aether.sysroute_dns_hijack
+          onClicked: aether.setConfig("sysroute_dns_hijack", aether.sysroute_dns_hijack ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "sysroute_strict_route"
+          category: "routing"
+          isAdvanced: true
+          label: "Strict Routing (Leak Protection)"
+          description: "Block unproxied traffic families to guarantee zero leakage"
+          checked: aether.sysroute_strict_route
+          onClicked: aether.setConfig("sysroute_strict_route", aether.sysroute_strict_route ? "0" : "1")
+        }
+
+        AetherToggle {
+          key: "sysroute_auto_redirect"
+          category: "routing"
+          isAdvanced: true
+          label: "Kernel TCP Redirection (nftables)"
+          description: "Accelerate TCP directly inside kernel space via nftables netlink"
+          checked: aether.sysroute_auto_redirect
+          onClicked: aether.setConfig("sysroute_auto_redirect", aether.sysroute_auto_redirect ? "0" : "1")
+        }
+
+        AetherField { key: "sysroute_exclude"; category: "routing"; isAdvanced: true; labelText: "Excluded subnets (CIDRs bypassed from tunnel)" }
+        AetherField { key: "sysroute_exclude_uids"; category: "routing"; isAdvanced: true; labelText: "Excluded Linux UIDs (users kept off tunnel)" }
+
+        AetherToggle {
+          key: "sysroute_persistent"
+          category: "routing"
+          isAdvanced: true
+          label: "Persistent Auto-Start"
+          description: "Automatically re-activate system routing whenever Aether connects"
+          checked: aether.sysroute_persistent
+          onClicked: aether.setConfig("sysroute_persistent", aether.sysroute_persistent ? "0" : "1")
         }
       }
 
       // =========================================================
-      // CATEGORY: NETWORK
+      // CATEGORY: ZERO TRUST
       // =========================================================
       Column {
         width: parent.width
         spacing: Style.space(10)
-        visible: root.settingsCategory === "all" || root.settingsCategory === "network"
+        visible: root.isCategoryVisible("zerotrust")
 
         PanelSectionHeader {
-          text: "IP VERSION"
+          visible: root.isSectionVisible(["team", "access_id", "access_secret", "access_token", "access_email", "enroll_address", "gateway"])
+          text: "CLOUDFLARE ZERO TRUST"
           foreground: root.foreground
         }
 
-        RowLayout {
-          width: parent.width
-          spacing: Style.space(6)
-
-          Button {
-            Layout.fillWidth: true
-            text: "IPv4"
-            selected: aether.ip_mode === "v4"
-            onClicked: aether.setConfig("ip", "v4")
-          }
-
-          Button {
-            Layout.fillWidth: true
-            text: "IPv6"
-            selected: aether.ip_mode === "v6"
-            onClicked: aether.setConfig("ip", "v6")
-          }
-
-          Button {
-            Layout.fillWidth: true
-            text: "Dual Stack"
-            selected: aether.ip_mode === "dual"
-            onClicked: aether.setConfig("ip", "dual")
-          }
-        }
-
-        PanelSectionHeader {
-          text: "PORTS & RESOLVERS"
-          foreground: root.dim
-        }
-
-        ResponsiveFormGrid {
-          id: portsPair
-          width: parent.width
-
-          AetherField { width: portsPair.cellWidth; key: "socks_port"; labelText: "SOCKS5 port" }
-          AetherField { width: portsPair.cellWidth; key: "http_proxy_port"; labelText: "HTTP CONNECT port (0 = off)" }
-        }
-
-        AetherField { key: "dns"; labelText: "Tunnel resolvers" }
-        AetherField { key: "routes_file"; labelText: "Routes file (--routes)" }
-
-        PanelSectionHeader {
-          text: "ROUTING RULES & BYPASS"
-          foreground: root.dim
-        }
-
-        AetherField { key: "route_block"; labelText: "Route block list (domains, CIDRs, port:, private)" }
-        AetherField { key: "route_direct"; labelText: "Route direct list (bypasses the tunnel)" }
-
-        PanelSectionHeader {
-          text: "STATIC PEERS & ENDPOINTS"
-          foreground: root.dim
-        }
-
-        ResponsiveFormGrid {
-          id: peersGrid
-          width: parent.width
-
-          AetherField { width: peersGrid.cellWidth; key: "peer"; labelText: "Forced peer (ip:port)" }
-          AetherField { width: peersGrid.cellWidth; key: "wg_peer"; labelText: "WireGuard peer (--wg-peer)" }
-          AetherField { width: peersGrid.cellWidth; key: "gool_peer"; labelText: "Gool peer (--gool-peer)" }
-          AetherField { width: peersGrid.cellWidth; key: "h2_peer"; labelText: "HTTP/2 peer (--h2-peer)" }
-          AetherField { width: peersGrid.cellWidth; key: "upstream"; labelText: "Upstream proxy URL" }
-          AetherField { width: peersGrid.cellWidth; key: "wiw_outer"; labelText: "WiW outer hop (ip:port)" }
-          AetherField { width: peersGrid.cellWidth; key: "wiw_inner"; labelText: "WiW inner hop (ip:port)" }
-          AetherField { width: peersGrid.cellWidth; key: "mim_outer"; labelText: "MIM outer hop (ip:port)" }
-          AetherField { width: peersGrid.cellWidth; key: "mim_inner"; labelText: "MIM inner hop (ip:port)" }
-        }
-
-        PanelSectionHeader {
-          text: "ZERO TRUST"
-          foreground: root.dim
-        }
-
-        AetherField { key: "team"; labelText: "Team name" }
+        AetherField { key: "team"; category: "zerotrust"; labelText: "Team organization slug" }
 
         ResponsiveFormGrid {
           id: accessGrid
           width: parent.width
 
-          AetherField { width: accessGrid.cellWidth; key: "access_id"; labelText: "Service token ID" }
-          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_secret"; labelText: "Service token secret" }
-          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_token"; labelText: "Enrolment token (JWT)" }
-          AetherField { width: accessGrid.cellWidth; key: "access_email"; labelText: "Enrolment email" }
-          AetherField { width: accessGrid.cellWidth; key: "enroll_address"; labelText: "Enrollment API host/address" }
+          AetherField { width: accessGrid.cellWidth; key: "access_id"; category: "zerotrust"; isAdvanced: true; labelText: "Service token ID" }
+          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_secret"; category: "zerotrust"; isAdvanced: true; labelText: "Service token secret" }
+          AetherField { width: accessGrid.cellWidth; secret: true; key: "access_token"; category: "zerotrust"; isAdvanced: true; labelText: "Enrolment token (JWT)" }
+          AetherField { width: accessGrid.cellWidth; key: "access_email"; category: "zerotrust"; isAdvanced: true; labelText: "Enrolment email" }
+          AetherField { width: accessGrid.cellWidth; key: "enroll_address"; category: "zerotrust"; isAdvanced: true; labelText: "Enrollment API host/address" }
         }
 
-        Toggle {
-          width: parent.width
-          label: "Organization Gateway"
+        AetherToggle {
+          key: "gateway"
+          category: "zerotrust"
+          label: "Organization Gateway Inspection"
           description: "Route HTTP(S) through Zero Trust gateway"
           checked: aether.gateway
           onClicked: aether.setConfig("gateway", aether.gateway ? "0" : "1")
         }
-
-        Toggle {
-          width: parent.width
-          label: "No Profile Retry"
-          description: "WireGuard scan: don't retry other obfuscation profiles"
-          checked: aether.no_profile_retry
-          onClicked: aether.setConfig("no_profile_retry", aether.no_profile_retry ? "0" : "1")
-        }
       }
 
-      // =========================================================
-      // CATEGORY: CIRCUMVENTION (BYPASS / DPI / TOR / PSIPHON)
-      // =========================================================
-      Column {
+      // ---------------------------------------------------------
+      // Configuration Management & Backup
+      // ---------------------------------------------------------
+      PanelSeparator {
+        visible: root.settingsSearchQuery === "" && (root.settingsCategory === "all" || root.settingsCategory === "core")
         width: parent.width
-        spacing: Style.space(10)
-        visible: root.settingsCategory === "all" || root.settingsCategory === "circumvention"
-
-        PanelSectionHeader {
-          text: "DPI EVASION & TLS (MASQUE / H2 / H3)"
-          foreground: root.foreground
-        }
-
-        Toggle {
-          width: parent.width
-          label: "TLS ClientHello Fragmentation"
-          description: "Fragment ClientHello on HTTP/2 transport to bypass DPI"
-          checked: aether.fragment
-          onClicked: aether.setConfig("fragment", aether.fragment ? "0" : "1")
-        }
-
-        Toggle {
-          width: parent.width
-          label: "API ClientHello Fragmentation"
-          description: "Fragment ClientHello on Zero Trust API calls (--api-fragment)"
-          checked: aether.api_fragment
-          onClicked: aether.setConfig("api_fragment", aether.api_fragment ? "0" : "1")
-        }
-
-        Toggle {
-          width: parent.width
-          label: "Encrypted Client Hello (ECH)"
-          description: "Enable automated ECH negotiation to hide SNI"
-          checked: aether.ech === "auto"
-          onClicked: aether.setConfig("ech", aether.ech === "auto" ? "off" : "auto")
-        }
-
-        ResponsiveFormGrid {
-          id: echGrid
-          width: parent.width
-
-          AetherField { width: echGrid.cellWidth; key: "ech_dns"; labelText: "ECH DoH resolver (--ech-dns)" }
-          AetherField { width: echGrid.cellWidth; key: "ech_domain"; labelText: "ECH domain name (--ech-domain)" }
-        }
-
-        Toggle {
-          width: parent.width
-          label: "QUIC v2 Opener"
-          description: "Send initial QUIC v2 opener packet on HTTP/3 (recommended)"
-          checked: !aether.no_quic_v2
-          onClicked: aether.setConfig("no_quic_v2", aether.no_quic_v2 ? "0" : "1")
-        }
-
-        Toggle {
-          width: parent.width
-          label: "Disable TLS GREASE"
-          description: "Disable GREASE extensions in TLS ClientHello (--disable-grease)"
-          checked: aether.disable_grease
-          onClicked: aether.setConfig("disable_grease", aether.disable_grease ? "0" : "1")
-        }
-
-        Toggle {
-          width: parent.width
-          label: "TLS Certificate Verification"
-          description: "Enforce strict TLS server certificate verification (--tls-verify)"
-          checked: aether.tls_verify
-          onClicked: aether.setConfig("tls_verify", aether.tls_verify ? "0" : "1")
-        }
-
-        AetherField { key: "tls_ciphers"; labelText: "TLS cipher suites (--tls-ciphers)" }
-        AetherField { key: "tls_groups"; labelText: "TLS key share groups" }
-
-        ResponsiveFormGrid {
-          id: fragPair
-          width: parent.width
-
-          AetherField { width: fragPair.cellWidth; key: "fragment_size"; labelText: "Fragment size (bytes)" }
-          AetherField { width: fragPair.cellWidth; key: "fragment_delay"; labelText: "Fragment delay (ms)" }
-        }
-
-        PanelSectionHeader {
-          text: "PSIPHON CIRCUMVENTION (V2.1)"
-          foreground: root.dim
-        }
-
-        Dropdown {
-          width: parent.width
-          label: "PSIPHON PROTOCOL MODE"
-          value: root.psiphonMode(aether.protocol)
-          foreground: root.foreground
-          accent: root.accent
-          fontFamily: root.fontFamily
-          options: [
-            { value: "off", label: "Disabled (use primary protocol)" },
-            { value: "psiphon", label: "WARP → Psiphon (carry Psiphon inside tunnel)" },
-            { value: "psiphon-reverse", label: "Psiphon → WARP (dial tunnel through Psiphon)" },
-            { value: "psiphon-only", label: "Psiphon only — standalone proxy without WARP" }
-          ]
-          onChanged: function(v) { aether.setConfig("protocol", v === "off" ? "masque" : v) }
-        }
-
-        AetherDropdown {
-          key: "psiphon_mode"
-          label: "PSIPHON TRANSPORT MODE"
-          value: aether.psiphon_mode
-          options: [
-            { value: "auto", label: "Auto — let Psiphon pick best egress" },
-            { value: "cdn", label: "CDN — fronted meek through CDN only (firewall bypass)" },
-            { value: "direct", label: "Direct — direct egress without CDN fronting" }
-          ]
-        }
-
-        AetherField { key: "psiphon_region"; labelText: "Psiphon egress country code (e.g. DE, US, NL, CH)" }
-
-        ResponsiveFormGrid {
-          id: psiphonGrid
-          width: parent.width
-
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_bind"; labelText: "Psiphon SOCKS5 bind (default 127.0.0.1:1821)" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_http"; labelText: "Psiphon HTTP proxy bind address" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_ips"; labelText: "CDN fronting IP list (comma-separated)" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sni"; labelText: "CDN fronting SNI names" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_cdn_sets"; labelText: "CDN sets (--psiphon-cdn-sets)" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_server_entries"; labelText: "Server entries file / URL" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_dir"; labelText: "Psiphon state dir (--psiphon-dir)" }
-          AetherField { width: psiphonGrid.cellWidth; key: "psiphon_bin"; labelText: "Custom psiphon-tunnel-core binary" }
-        }
-
-        AetherField { key: "psiphon_config"; labelText: "Psiphon custom JSON config file (--psiphon-config)" }
-
-        PanelSectionHeader {
-          text: "TOR ONION NETWORK (V2.1)"
-          foreground: root.dim
-        }
-
-        Dropdown {
-          width: parent.width
-          label: "TOR MODE"
-          value: root.torMode(aether.protocol)
-          foreground: root.foreground
-          accent: root.accent
-          fontFamily: root.fontFamily
-          options: [
-            { value: "off", label: "Disabled" },
-            { value: "tor", label: "Carry Tor inside the tunnel" },
-            { value: "tor-reverse", label: "Dial the tunnel through Tor" },
-            { value: "tor-only", label: "Tor only — no WARP tunnel" }
-          ]
-          onChanged: function(v) { aether.setConfig("protocol", v === "off" ? "masque" : v) }
-        }
-
-        AetherDropdown {
-          key: "tor_relays"
-          label: "TOR ONIONOO RELAYS (V2.1)"
-          value: aether.tor_relays !== "" ? aether.tor_relays : "auto"
-          options: [
-            { value: "auto", label: "Auto — Onionoo relays alongside BridgeDB (recommended)" },
-            { value: "only", label: "Only — use Onionoo relays exclusively as bridges" },
-            { value: "off", label: "Off — BridgeDB bridges only" }
-          ]
-        }
-
-        AetherDropdown {
-          key: "tor_relay_ports"
-          label: "TOR RELAY PORTS"
-          value: aether.tor_relay_ports !== "" ? aether.tor_relay_ports : "web"
-          options: [
-            { value: "web", label: "Web ports only (80 and 443 — firewall stealth)" },
-            { value: "any", label: "Any ports — all running relay ports" }
-          ]
-        }
-
-        AetherDropdown {
-          key: "tor_bridges"
-          label: "TOR BRIDGES"
-          value: aether.tor_bridges
-          options: [
-            { value: "", label: "Auto — try plain Tor, fall back to bridges" },
-            { value: "on", label: "Always use bridges" },
-            { value: "off", label: "Never use bridges" }
-          ]
-        }
-
-        ResponsiveFormGrid {
-          id: torGrid
-          width: parent.width
-
-          AetherField { width: torGrid.cellWidth; key: "tor_bind"; labelText: "Tor proxy bind address" }
-          AetherField { width: torGrid.cellWidth; key: "tor_http"; labelText: "Tor HTTP proxy address (--tor-http)" }
-          AetherField { width: torGrid.cellWidth; key: "tor_country"; labelText: "Bridge country (e.g. ir)" }
-          AetherField { width: torGrid.cellWidth; key: "tor_bridge_file"; labelText: "Tor bridge list file (--tor-bridge-file)" }
-          AetherField { width: torGrid.cellWidth; key: "tor_dir"; labelText: "Tor state directory" }
-          AetherField { width: torGrid.cellWidth; key: "tor_pt_dir"; labelText: "Transport search directory" }
-        }
-
-        AetherField { key: "tor_bridge"; labelText: "Custom bridge line (obfs4 1.2.3.4:443 …)" }
-        AetherField { key: "tor_pt"; labelText: "Pluggable transport binary ([name=]/path)" }
       }
 
-      // =========================================================
-      // CATEGORY: ADVANCED
-      // =========================================================
-      Column {
+      PanelSectionHeader {
+        visible: root.settingsSearchQuery === "" && (root.settingsCategory === "all" || root.settingsCategory === "core")
+        text: "CONFIGURATION MANAGEMENT & BACKUP"
+        foreground: root.foreground
+      }
+
+      BorderSurface {
+        visible: root.settingsSearchQuery === "" && (root.settingsCategory === "all" || root.settingsCategory === "core")
         width: parent.width
-        spacing: Style.space(10)
-        visible: root.settingsCategory === "all" || root.settingsCategory === "advanced"
+        radius: Style.cornerRadius
+        color: Color.cardFill || Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04)
+        implicitHeight: backupCol.implicitHeight + Style.space(20)
 
-        PanelSectionHeader {
-          text: "CONNECTION & HARDWARE TUNING"
-          foreground: root.foreground
-        }
+        Column {
+          id: backupCol
+          width: parent.width - Style.space(20)
+          anchors.centerIn: parent
+          spacing: Style.space(10)
 
-        Toggle {
-          width: parent.width
-          label: "Quick Reconnect"
-          description: "Fast-resume connection using the last verified gateway"
-          checked: aether.quick_reconnect
-          onClicked: aether.setConfig("quick_reconnect", aether.quick_reconnect ? "0" : "1")
-        }
+          Text {
+            width: parent.width
+            text: "Export or restore full plugin state, or copy active environment variables to run in terminal sessions."
+            wrapMode: Text.Wrap
+            font.pixelSize: Style.font.caption
+            color: root.dim
+            font.family: root.fontFamily
+          }
 
-        Toggle {
-          width: parent.width
-          label: "Skip Data-Plane Probe"
-          description: "Skip HTTP probe verification (connects faster but less resilient)"
-          checked: aether.no_data_check
-          onClicked: aether.setConfig("no_data_check", aether.no_data_check ? "0" : "1")
-        }
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
 
-        Toggle {
-          width: parent.width
-          label: "Firewall Mark (SO_MARK 0xff)"
-          description: "Attach mark for router / transparent tun2socks bypass (requires CAP_NET_ADMIN)"
-          checked: aether.mark_enabled
-          onClicked: aether.setConfig("mark", aether.mark_enabled ? "0" : "1")
-        }
+            TextField {
+              id: backupPathInput
+              Layout.fillWidth: true
+              placeholderText: "~/aether-backup.env"
+              text: "~/aether-backup.env"
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              foreground: root.foreground
+              accent: root.accent
+            }
 
-        Toggle {
-          width: parent.width
-          label: "Log Traffic Statistics (--stats)"
-          description: "Periodically log bandwidth upload/download totals and tunnel uptime"
-          checked: aether.stats_enabled
-          onClicked: aether.toggleStats()
-        }
+            Button {
+              text: "Export"
+              accent: root.accent
+              enabled: !aether.actionInProgress && backupPathInput.text.trim() !== ""
+              onClicked: aether.exportConfig(backupPathInput.text.trim())
+            }
 
-        PanelSectionHeader {
-          text: "TIMING & DEADLINES"
-          foreground: root.dim
-        }
+            Button {
+              text: "Import"
+              enabled: !aether.actionInProgress && backupPathInput.text.trim() !== ""
+              onClicked: root.pendingImportPath = backupPathInput.text.trim()
+            }
+          }
 
-        ResponsiveFormGrid {
-          id: timingGrid
-          width: parent.width
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
 
-          AetherField { width: timingGrid.cellWidth; key: "keepalive"; labelText: "WireGuard keepalive (s)" }
-          AetherField { width: timingGrid.cellWidth; key: "validate_secs"; labelText: "Data-plane validate (s)" }
-          AetherField { width: timingGrid.cellWidth; key: "startup_secs"; labelText: "MASQUE startup deadline (s)" }
-          AetherField { width: timingGrid.cellWidth; key: "reconnect_secs"; labelText: "Reconnect delay (s)" }
-          AetherField { width: timingGrid.cellWidth; key: "exit_loc_secs"; labelText: "Exit check interval (s, default 60)" }
-          AetherField { width: timingGrid.cellWidth; key: "stats_secs"; labelText: "Traffic stats interval (s, default 15)" }
-        }
+            Button {
+              Layout.fillWidth: true
+              text: "Copy SOCKS / HTTP Env"
+              onClicked: aether.copyExportEnv()
+            }
 
-        PanelSectionHeader {
-          text: "CUSTOM CORE FLAGS"
-          foreground: root.dim
-        }
-
-        AetherField {
-          key: "extra_args"
-          labelText: "Extra core arguments (verbatim)"
-          hintText: "Appended as-is to the core command line, split on spaces. Handy for flags the panel doesn't expose — e.g. --verbose, or --ironclad-port 80."
+            Button {
+              Layout.fillWidth: true
+              text: "Copy curl Proxy Command"
+              onClicked: aether.copyCurlSnippet()
+            }
+          }
         }
       }
     }
@@ -1996,6 +2651,66 @@ Panel {
               text: "Restart"
               enabled: aether.zeptun_state === "RUNNING" && aether.connected && !aether.actionInProgress
               onClicked: aether.systemRouteRestart()
+            }
+          }
+        }
+      }
+
+      // Tor / Psiphon routing limitation warning card
+      BorderSurface {
+        visible: aether.sysroute_egress_kind === "tor" || aether.sysroute_egress_kind === "psiphon" || aether.protocol.indexOf("tor") === 0 || aether.protocol.indexOf("psiphon") === 0 || aether.sysroute_tor_psiphon_warning !== ""
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.12)
+        borderSpec: Border.flat(root.urgent, 1)
+        implicitHeight: loopWarningCol.implicitHeight + Style.space(20)
+
+        Column {
+          id: loopWarningCol
+          width: parent.width - Style.space(24)
+          anchors.centerIn: parent
+          spacing: Style.space(6)
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
+            Text {
+              text: "⚠"
+              color: root.urgent
+              font.bold: true
+              font.pixelSize: Style.font.subtitle
+            }
+            Text {
+              Layout.fillWidth: true
+              text: "Tor / Psiphon Routing Limitation"
+              color: root.urgent
+              font.bold: true
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.subtitle
+            }
+          }
+
+          Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: "• UDP Limitation: Tor and Psiphon SOCKS5 endpoints do not support UDP ASSOCIATE. Native UDP queries will fail over zeptun0.\n• TUN Loopback: Child egress processes (psiphon-tunnel-core, lyrebird) do not inherit SO_MARK 0xff across exec. Outbound helper sockets loop back into zeptun0 unless excluded.\n• Recommended Fix: Set UDP Mode to 'tcp' and enable 'Fake-IP' resolution, or configure UID exclusions."
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          RowLayout {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Button {
+              Layout.fillWidth: true
+              text: "Enable Fake-IP & TCP UDP"
+              accent: root.accent
+              onClicked: {
+                aether.setConfig("sysroute_fake_ip", "1")
+                aether.setConfig("sysroute_udp_mode", "tcp")
+              }
             }
           }
         }
@@ -2303,7 +3018,7 @@ Panel {
   }
 
   // -------------------------------------------------------------
-  // TAB 4: LIVE LOGS — auto-tailing & color-coded viewer
+  // TAB 4: LIVE LOGS & DIAGNOSTICS
   // -------------------------------------------------------------
   Component {
     id: tabLogsComp
@@ -2312,112 +3027,237 @@ Panel {
       width: parent.width
       spacing: Style.space(8)
 
+      // Sub-tab Navigation
       RowLayout {
         width: parent.width
+        spacing: Style.space(4)
 
         Button {
-          text: "Aether"
-          selected: aether.logsView === "aether"
-          onClicked: aether.setLogsView("aether")
+          Layout.fillWidth: true
+          text: "Core Logs"
+          selected: root.logsSubTab === "core"
+          onClicked: {
+            root.logsSubTab = "core"
+            aether.setLogsView("aether")
+          }
         }
 
         Button {
-          text: "Zeptun"
-          selected: aether.logsView === "zeptun"
+          Layout.fillWidth: true
+          text: "Zeptun Logs"
+          selected: root.logsSubTab === "zeptun"
           enabled: aether.zeptun_available
-          onClicked: aether.setLogsView("zeptun")
-        }
-
-        Item { Layout.fillWidth: true }
-
-        Button {
-          text: aether.fetchingLogs ? "…" : "Refresh"
-          enabled: !aether.fetchingLogs
-          onClicked: aether.fetchLogs()
+          onClicked: {
+            root.logsSubTab = "zeptun"
+            aether.setLogsView("zeptun")
+          }
         }
 
         Button {
-          text: "Copy"
-          onClicked: aether.copyAllLogs()
+          Layout.fillWidth: true
+          text: "Diagnostics"
+          selected: root.logsSubTab === "doctor"
+          onClicked: {
+            root.logsSubTab = "doctor"
+            aether.runDoctor()
+            aether.fetchCommandPreview()
+          }
         }
-
-        Button {
-          text: "Clear"
-          onClicked: aether.clearLogs()
-        }
       }
 
-      Toggle {
+      // --- Core or Zeptun Live Log Viewer ---
+      Column {
         width: parent.width
-        label: "Auto-Tail Logs"
-        description: "Continuously stream new output while panel is open"
-        checked: aether.autoTailLogs
-        onClicked: aether.autoTailLogs = !aether.autoTailLogs
-      }
+        spacing: Style.space(8)
+        visible: root.logsSubTab !== "doctor"
 
-      Text {
-        width: parent.width
-        text: aether.logsView === "zeptun"
-          ? "Log file: ~/.local/share/omarchy-aether/zeptun.log"
-          : "Log file: ~/.local/share/omarchy-aether/aether.log"
-        color: root.dim
-        font.pixelSize: Style.font.caption
-        elide: Text.ElideMiddle
-      }
+        RowLayout {
+          width: parent.width
 
-      BorderSurface {
-        width: parent.width
-        radius: Style.cornerRadius
-        // Fixed-height viewport with its OWN scroll: the box itself scrolls,
-        // not the panel. No manual ScrollBar position writes anywhere — those
-        // caused the earlier reflow distortion.
-        implicitHeight: Style.space(340)
-        color: "#0a0a0f"
-        borderSpec: Border.flat(root.dim, 1)
+          Item { Layout.fillWidth: true }
 
-        ScrollView {
-          id: logScroll
-          anchors.fill: parent
-          anchors.margins: Style.space(8)
-          clip: true
-          ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-
-          function toBottom() {
-            var f = logScroll.contentItem
-            if (f) f.contentY = Math.max(0, f.contentHeight - f.height)
+          Button {
+            text: aether.fetchingLogs ? "…" : "Refresh"
+            enabled: !aether.fetchingLogs
+            onClicked: aether.fetchLogs()
           }
 
-          // Tail when the tab mounts; the TextArea's onTextChanged covers
-          // updates while it is already visible.
-          Component.onCompleted: if (aether.autoTailLogs) Qt.callLater(logScroll.toBottom)
-          Connections {
-            target: root
-            function onCurrentTabChanged() {
-              if (root.currentTab === "logs" && aether.autoTailLogs)
-                Qt.callLater(logScroll.toBottom)
+          Button {
+            text: "Copy"
+            onClicked: aether.copyAllLogs()
+          }
+
+          Button {
+            text: "Clear"
+            onClicked: aether.clearLogs()
+          }
+        }
+
+        Toggle {
+          width: parent.width
+          label: "Auto-Tail Logs"
+          description: "Continuously stream new output while panel is open"
+          checked: aether.autoTailLogs
+          onClicked: aether.autoTailLogs = !aether.autoTailLogs
+        }
+
+        Text {
+          width: parent.width
+          text: aether.logsView === "zeptun"
+            ? "Log file: ~/.local/share/omarchy-aether/zeptun.log"
+            : "Log file: ~/.local/share/omarchy-aether/aether.log"
+          color: root.dim
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideMiddle
+        }
+
+        BorderSurface {
+          width: parent.width
+          radius: Style.cornerRadius
+          implicitHeight: Style.space(340)
+          color: "#0a0a0f"
+          borderSpec: Border.flat(root.dim, 1)
+
+          ScrollView {
+            id: logScroll
+            anchors.fill: parent
+            anchors.margins: Style.space(8)
+            clip: true
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            function toBottom() {
+              var f = logScroll.contentItem
+              if (f) f.contentY = Math.max(0, f.contentHeight - f.height)
+            }
+
+            Component.onCompleted: if (aether.autoTailLogs) Qt.callLater(logScroll.toBottom)
+            Connections {
+              target: root
+              function onCurrentTabChanged() {
+                if (root.currentTab === "logs" && aether.autoTailLogs)
+                  Qt.callLater(logScroll.toBottom)
+              }
+            }
+
+            TextArea {
+              id: logView
+              readOnly: true
+              textFormat: TextEdit.RichText
+              wrapMode: TextEdit.WrapAnywhere
+              persistentSelection: false
+              color: root.foreground
+              selectionColor: Style.selectionFillFor(root.foreground, root.accent)
+              selectedTextColor: root.foreground
+              font.family: "monospace"
+              font.pixelSize: Style.font.caption
+
+              text: {
+                var html = aether.logsView === "zeptun" ? aether.zeptunLogsHtml : aether.logsHtml
+                return html !== "" ? html : "<span style='color:#666;'>(No recent log entries)</span>"
+              }
+
+              onTextChanged: {
+                if (aether.autoTailLogs && root.currentTab === "logs")
+                  Qt.callLater(logScroll.toBottom)
+              }
+            }
+          }
+        }
+      }
+
+      // --- Doctor Diagnostics & CLI Command Preview ---
+      Column {
+        width: parent.width
+        spacing: Style.space(8)
+        visible: root.logsSubTab === "doctor"
+
+        RowLayout {
+          width: parent.width
+          spacing: Style.space(6)
+
+          Button {
+            text: aether.doctorRunning ? "Checking…" : "Run Doctor"
+            accent: root.accent
+            enabled: !aether.doctorRunning
+            onClicked: {
+              aether.runDoctor()
+              aether.fetchCommandPreview()
             }
           }
 
-          TextArea {
-            id: logView
-            readOnly: true
-            textFormat: TextEdit.RichText
-            wrapMode: TextEdit.WrapAnywhere
-            persistentSelection: false
-            color: root.foreground
-            selectionColor: Style.selectionFillFor(root.foreground, root.accent)
-            selectedTextColor: root.foreground
-            font.family: "monospace"
-            font.pixelSize: Style.font.caption
+          Button {
+            text: "Copy Report"
+            onClicked: aether.copyToClipboard("=== AETHER COMMAND ===\n" + aether.commandPreview + "\n\n" + aether.doctorOutput, "Diagnostics report")
+          }
 
-            text: {
-              var html = aether.logsView === "zeptun" ? aether.zeptunLogsHtml : aether.logsHtml
-              return html !== "" ? html : "<span style='color:#666;'>(No recent log entries)</span>"
+          Item { Layout.fillWidth: true }
+        }
+
+        PanelSectionHeader {
+          text: "ACTIVE CORE COMMAND LINE"
+          foreground: root.foreground
+        }
+
+        BorderSurface {
+          width: parent.width
+          radius: Style.cornerRadius
+          color: "#0a0a0f"
+          borderSpec: Border.flat(root.dim, 1)
+          implicitHeight: cmdCol.implicitHeight + Style.space(16)
+
+          Column {
+            id: cmdCol
+            width: parent.width - Style.space(16)
+            anchors.centerIn: parent
+            spacing: Style.space(6)
+
+            TextArea {
+              width: parent.width
+              readOnly: true
+              wrapMode: TextEdit.WrapAnywhere
+              font.family: "monospace"
+              font.pixelSize: Style.font.caption
+              color: root.accent
+              text: aether.commandPreview !== "" ? aether.commandPreview : "(Generating CLI command preview…)"
             }
 
-            onTextChanged: {
-              if (aether.autoTailLogs && root.currentTab === "logs")
-                Qt.callLater(logScroll.toBottom)
+            Button {
+              text: "Copy Command"
+              onClicked: aether.copyToClipboard(aether.commandPreview, "CLI Command")
+            }
+          }
+        }
+
+        PanelSectionHeader {
+          text: "SYSTEM HEALTH DIAGNOSTICS"
+          foreground: root.foreground
+        }
+
+        BorderSurface {
+          width: parent.width
+          radius: Style.cornerRadius
+          implicitHeight: Style.space(260)
+          color: "#0a0a0f"
+          borderSpec: Border.flat(root.dim, 1)
+
+          ScrollView {
+            anchors.fill: parent
+            anchors.margins: Style.space(8)
+            clip: true
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            TextArea {
+              readOnly: true
+              wrapMode: TextEdit.WrapAnywhere
+              persistentSelection: false
+              color: root.foreground
+              selectionColor: Style.selectionFillFor(root.foreground, root.accent)
+              selectedTextColor: root.foreground
+              font.family: "monospace"
+              font.pixelSize: Style.font.caption
+              text: aether.doctorRunning
+                ? "Running system diagnostics…"
+                : (aether.doctorOutput !== "" ? aether.doctorOutput : "Click 'Run Doctor' to run health check.")
             }
           }
         }

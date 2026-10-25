@@ -14,7 +14,14 @@ The plugin is written and maintained by **iliya**. It is an independent companio
 
 The plugin talks to the Aether core through `bin/aether-ctl`. It can download the official core for you, switch between cores found on your system, and surface the daemon's live output — all from the Omarchy bar, with no root required for normal use.
 
-Full reference documentation lives in [DOCS.md](DOCS.md).
+### Documentation Guides
+
+- [Full Technical Reference (DOCS.md)](DOCS.md)
+- [Settings & Schema Directory (docs/SETTINGS.md)](docs/SETTINGS.md)
+- [Configuration, Persistence & CLI (docs/CONFIG.md)](docs/CONFIG.md)
+- [Transports & Circumvention Guide (docs/TRANSPORTS.md)](docs/TRANSPORTS.md)
+- [System Routing Architecture & Limitations (docs/SYSTEM-ROUTING.md)](docs/SYSTEM-ROUTING.md)
+- [Troubleshooting & Diagnostics Guide (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)
 
 ## Features
 
@@ -38,27 +45,25 @@ Full reference documentation lives in [DOCS.md](DOCS.md).
 
 - Shows the active core binary, its version, and `CAP_NET_ADMIN` status.
 - Switch between every Aether core discovered on your system, or download the pinned, checksum-verified official release from GitHub with one click.
-- IP version (IPv4 / IPv6 / dual), quick reconnect, TLS ClientHello fragmentation (default-on in v2.3.0), API ClientHello fragmentation (`--api-fragment`), Encrypted Client Hello with custom DoH resolver & domain (`--ech-dns`, `--ech-domain`), QUIC v2 opener, data-plane probe skip, firewall mark.
-- **Advanced section** — every remaining Aether CLI flag has a control here:
-  - **Psiphon Circumvention**: mode (`auto`, `cdn` fronted meek, `direct`), egress region, bind/HTTP ports, custom CDN IPs/SNI, CDN sets (`--psiphon-cdn-sets`), server entries file/URL (`--psiphon-server-entries`), custom directory (`--psiphon-dir`), custom binary (`--psiphon-bin`), custom JSON config.
-  - **Tor Network**: protocol mode, Onionoo relays (`auto`, `only`, `off`), relay ports (`web`, `any`), bridge file, custom bridge line, bind/HTTP ports, pluggable transports (`pt/lyrebird`).
-  - **Exit Location & Traffic Stats**: `--exit-loc`, `--exit-loc-secs`, periodic traffic bandwidth & uptime logging (`--stats`, `--stats-secs`).
-  - **Static Peers & Endpoints**: forced peers (`--peer`, `--wg-peer`, `--gool-peer`, `--h2-peer`), WireGuard-in-WireGuard and MASQUE-in-MASQUE endpoints, upstream proxy chaining.
-  - **Network & Zero Trust**: tunnel resolvers, routes file, routing block/direct lists, Zero Trust enrolment (team, service tokens, e-mail, gateway, `--enroll-address`).
-  - **Timing, TLS & Logging**: validation/startup/reconnect timing, WireGuard keepalive, TLS groups, TLS cipher suites (`--tls-ciphers`), disable GREASE (`--disable-grease`), TLS certificate verification (`--tls-verify`), resource profile, log level, and verbatim extra-arguments escape hatch.
-
-**Popup panel — Live Logs tab**
-
-- Polls the last 100 lines of the daemon log with color-coded levels (errors, warnings, successes) and auto-tail, plus copy and clear.
+- **Profile Presets**: 1-click profiles for `Default` (standard WARP), `Stealth` (anti-DPI with TLS 1.3 ClientHello fragmentation & ECH), `Speed` (turbo scan & cubic congestion), `Tor Multi-hop`, and `Psiphon Bypass`.
+- **Live Search & Category Navigation**: Filter any setting instantly by name or keyword across Core & Engine, Network & Ports, TLS 1.3 & Fingerprint Evasion, Circumvention, System Routing, and Zero Trust.
+- **Basic vs Advanced Toggle**: Keep the interface clean with essential controls or expand to configure all 60+ parameters.
+- **Per-Field Reset & Global Reset**: Reset individual settings to defaults with one click or restore factory defaults with confirmation.
+- **TLS 1.3 & Fingerprint Evasion (Core v2.4.0)**: ClientHello fragmentation (`--fragment`, `--fragment-size`, `--fragment-delay`), Encrypted Client Hello (`--ech auto`, `--ech-dns`, `--ech-domain`), synthetic GREASE injection, custom cipher suites, curve groups, ALPS draft version, and extension ordering.
 
 **Popup panel — Routing tab (optional system-wide routing)**
 
-- Route **all** system traffic through the Aether tunnel with the [Zeptun](https://github.com/Noisemux/zeptun) TUN engine: `system traffic → Zeptun TUN → Aether local SOCKS5 → Aether tunnel`.
+- Route **all** system traffic through the Aether tunnel with the [Zeptun](https://github.com/Noisemux/zeptun) TUN engine (`v1.1.3`): `system traffic → Zeptun TUN → Aether local SOCKS5 → Aether tunnel`.
 - Completely optional and **off by default** — normal Aether behavior is untouched until you enable it.
-- One-click download of the pinned, checksum-verified Zeptun release into the plugin's data directory (a system-wide `/usr/local/bin/zeptun` install is discovered and used if you prefer it).
-- Start / Stop / Restart controls with live state (starting, active, failed) and tun/pid/uptime details.
-- Comprehensive engine controls: Engine profile (Desktop, Mobile, Server), TUN MTU, IPv4 vs IPv4+IPv6, Strict routing (leak protection), Auto-redirect TCP (nftables netlink), DNS mode & custom in-tunnel DNS servers (stops ISP DNS poisoning for blocked sites like YouTube and X), Fake-IP remote resolution, DNS hijack (port 53 capture), TCP/IP stack mode (userspace/hybrid/system), Congestion control (Cubic/NewReno), native vs TCP-carried UDP, TCP Fast Open, Hardware offloads (TSO/USO), I/O backend (auto/io_uring/epoll), Zeptun log levels, persistent auto-start, UID exclusions, and route exclusions.
-- The Routing tab only appears as options; until you flip the master switch, nothing about your network changes.
+- Comprehensive engine controls: Engine profiles (Desktop, Mobile, Server), TUN MTU, IPv4 vs IPv4+IPv6, Strict routing (leak protection), Auto-redirect TCP (nftables netlink), DNS mode & custom in-tunnel DNS servers, Fake-IP remote resolution, DNS hijack (port 53 capture), TCP/IP stack mode, Congestion control, native vs TCP-carried UDP, TCP Fast Open, Hardware offloads, I/O backend (`auto`, `io_uring`, `epoll`), Zeptun log levels, persistent auto-start, UID exclusions, and route exclusions.
+- **Tor & Psiphon Guard**: Detects multi-hop egress and displays a warning card with 1-click mitigation for child-process loopback and UDP ASSOCIATE limitations.
+
+**Popup panel — Live Logs & Diagnostics tab**
+
+- Sub-tab navigation switching seamlessly between **Core Logs**, **Zeptun Logs**, and **Diagnostics**.
+- Real-time auto-tailing with syntax color-coding, manual refresh, copy, and log clearing.
+- **Diagnostics & Health Doctor**: Runs `bin/aether-ctl doctor` in-panel to diagnose binary integrity, Linux capabilities, port availability, and helper presence.
+- **CLI Command Line Generator**: Generates and copies the exact command line executed by the daemon for troubleshooting and standalone execution.
 
 **Missing-core handling**
 
@@ -76,13 +81,6 @@ Install with:
 
 ```sh
 omarchy plugin add https://github.com/IHosseini083/aether-core-omarchy.git --enable
-```
-
-Manual alternative:
-
-```sh
-git clone https://github.com/IHosseini083/aether-core-omarchy.git ~/.config/omarchy/plugins/cluvex.aether
-omarchy plugin enable cluvex.aether
 ```
 
 The plugin appears in the bar's right section. Move it with `omarchy bar move cluvex.aether --section <left|center|right>` if you like.
@@ -107,7 +105,7 @@ If the bar widget doesn't pick up the change immediately, restart the Omarchy sh
 
 ## Core
 
-The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core 2.3.0**.
+The plugin controls an Aether binary; it does not ship one. It is kept up-to-date with **Aether core v2.4.0** and **Zeptun v1.1.3**.
 
 **Where the plugin looks for a core** (first match wins; each candidate is verified by running it with `--help` and checking for SOCKS5 output, so the unrelated `aether` theme tool is never mistaken for the core):
 
@@ -218,6 +216,26 @@ omarchy-shell cluvex.aether systemRouteStatus   # system routing state
 omarchy-shell cluvex.aether systemRouteStart    # route all traffic (needs setup above)
 omarchy-shell cluvex.aether systemRouteStop
 omarchy-shell cluvex.aether systemRouteRestart
+```
+
+## CLI & Automation
+
+Direct management via `bin/aether-ctl`:
+
+```sh
+# Lifecycle & diagnostics
+bin/aether-ctl status               # Full JSON status
+bin/aether-ctl doctor               # System health check & capability inspection
+bin/aether-ctl command              # Print active core command line invocation
+bin/aether-ctl start | stop | restart
+
+# Configuration management
+bin/aether-ctl get <key>            # Get configuration setting
+bin/aether-ctl set <key> <val>      # Set setting and hot-reload tunnel if running
+bin/aether-ctl reset <key|all>      # Restore field or full default configuration
+bin/aether-ctl preset <name>        # Apply preset: default, stealth, speed, tor_multihop, psiphon_bypass
+bin/aether-ctl export [file]        # Export configuration
+bin/aether-ctl import <file>        # Import and apply configuration
 ```
 
 ## Data and file paths

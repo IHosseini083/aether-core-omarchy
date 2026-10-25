@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "cluvex.aether",
   "name": "Aether",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "author": "iliya",
   "license": "MIT",
-  "description": "Omarchy bar controls for the Aether core (2.3.0): Gool over MASQUE, Psiphon circumvention, Tor bridges & relays, exit location filtering, live stats, core management, polled logs, and optional system-wide TUN routing via Zeptun.",
+  "description": "Omarchy bar controls for the Aether core (v2.4.0): Gool over MASQUE, Psiphon circumvention, Tor bridges & Onionoo relays, TLS 1.3 fingerprint evasion, live stats, categorized settings browser with presets and search, polled logs, diagnostics doctor, and system-wide TUN routing via Zeptun (v1.1.3).",
   "kinds": [
     "bar-widget"
   ],

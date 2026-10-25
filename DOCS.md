@@ -1,17 +1,26 @@
 # omarchy-aether — Reference
 
-Deep documentation for the `cluvex.aether` Omarchy shell plugin. For a quick start see [README.md](README.md). For the Aether core itself, see the [upstream docs](https://github.com/CluvexStudio/Aether/blob/main/Docs/DOCS.en.md) — this document covers the plugin.
+Deep documentation for the `cluvex.aether` Omarchy shell plugin (Plugin `v2.0.0`, Aether core `v2.4.0`, Zeptun `v1.1.3`). For a quick start see [README.md](README.md). For the Aether core itself, see the [upstream docs](https://github.com/CluvexStudio/Aether/blob/main/Docs/DOCS.en.md) — this document covers the plugin.
+
+### Dedicated Documentation Guides
+
+- [Settings & Schema Directory (docs/SETTINGS.md)](docs/SETTINGS.md)
+- [Configuration, Persistence & CLI (docs/CONFIG.md)](docs/CONFIG.md)
+- [Transports & Circumvention Guide (docs/TRANSPORTS.md)](docs/TRANSPORTS.md)
+- [System Routing Architecture & Limitations (docs/SYSTEM-ROUTING.md)](docs/SYSTEM-ROUTING.md)
+- [Troubleshooting & Diagnostics Guide (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)
 
 ## Architecture
 
 ```
 ~/.config/omarchy/plugins/cluvex.aether/
-├── manifest.json        # Plugin contract (kind: bar-widget)
-├── Panel.qml            # Entry point: bar button + popup panel (5 tabs)
+├── manifest.json        # Plugin contract (kind: bar-widget, v2.0.0)
+├── Panel.qml            # Entry point: bar button + popup panel (4 tabs)
 ├── Service.qml          # Quickshell Process/Timer layer driving aether-ctl
-├── Model.js             # JSON parsing, formatting, log colorization
+├── Model.js             # JSON parsing, formatting, schema, presets, log colorization
 ├── AetherIcon.qml       # Vector shield icon (bar + hero), state-aware
-├── bin/aether-ctl       # Bash CLI: status, lifecycle, config, install, system routing
+├── bin/aether-ctl       # Bash CLI: status, lifecycle, config, doctor, presets, system routing
+├── docs/                # Comprehensive architecture and configuration guides
 └── systemd/             # Optional user units (aether.service, zeptun.service)
 ```
 
@@ -27,10 +36,17 @@ Data flow: `Panel.qml` instantiates `Service.qml`, which shells out to `bin/aeth
 
 ```
 aether-ctl status                     # JSON status blob (see below)
+aether-ctl doctor                     # System health check & capability inspection
+aether-ctl command                    # Print active core command line invocation
 aether-ctl start|stop|restart|toggle  # daemon lifecycle
 aether-ctl foreground                 # run in foreground (for systemd)
 aether-ctl install                    # download pinned official release (checksum-verified)
+aether-ctl get <key>                  # read current configuration setting
 aether-ctl set <key> <val>            # update one setting (hot-restarts)
+aether-ctl reset <key|all>            # reset setting or all settings to defaults
+aether-ctl preset <name>              # apply preset (default, stealth, speed, tor_multihop, psiphon_bypass)
+aether-ctl export [file]              # export configuration to stdout or file
+aether-ctl import <file>              # validate and import configuration file
 aether-ctl set-protocol <proto> <0|1> # atomic protocol + h2 switch
 aether-ctl cores                      # discovered core binaries
 aether-ctl remove-core [path]         # delete a core (stops daemon if active; managed dir removed whole)
@@ -58,13 +74,32 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `socks_port` | `1819` | `--bind 127.0.0.1:<port>` | ✓ Advanced |
 | `http_proxy_port` | `0` (off), port | `--http-proxy` | ✓ Advanced |
 | `quick_reconnect` | `1`, `0` | `--quick-reconnect` / `--no-quick-reconnect` | ✓ |
-| `fragment` | `1`, `0` | `--fragment` / `--no-fragment` (default-on in v2.3.0) | ✓ |
-| `fragment_size` | `16-32` | `--fragment-size` | ✓ Advanced |
-| `fragment_delay` | `2-10` | `--fragment-delay` | ✓ Advanced |
-| `api_fragment` | `0`, `1` | `--api-fragment` | ✓ Circumvention |
-| `ech` | `off`, `auto`, or base64 config | `--ech <value>` | ✓ |
-| `ech_dns` | empty | `--ech-dns <url>` | ✓ Circumvention |
-| `ech_domain` | empty | `--ech-domain <domain>` | ✓ Circumvention |
+| `fragment` | `0` (off), `1` | `--fragment` (omitted when off; `--no-fragment` removed upstream) | ✓ TLS |
+| `fragment_size` | `8-16` | `--fragment-size <min-max>` | ✓ TLS |
+| `fragment_delay` | `2-10` | `--fragment-delay <min-max>` | ✓ TLS |
+| `ech` | `off`, `auto`, or base64 config | `--ech <value>` | ✓ TLS |
+| `ech_dns` | empty | `--ech-dns <url>` | ✓ TLS |
+| `ech_domain` | empty | `--ech-domain <domain>` | ✓ TLS |
+| `enable_ech_grease` | `0`, `1` | `--enable-ech-grease` | ✓ TLS |
+| `tls13_ciphers` | empty | `--tls13-ciphers <list>` | ✓ TLS |
+| `tls_ciphers` | empty | `--tls-ciphers <list>` | ✓ TLS |
+| `tls_groups` | empty | `--tls-groups <list>` | ✓ TLS |
+| `tls_key_shares` | empty | `--tls-key-shares <list>` | ✓ TLS |
+| `tls_sigalgs` | empty | `--tls-sigalgs <list>` | ✓ TLS |
+| `enable_grease_sigalgs` | `0`, `1` | `--enable-grease-sigalgs` | ✓ TLS |
+| `tls_cert_compression` | empty | `--tls-cert-compression <brotli\|zstd>` | ✓ TLS |
+| `tls_alps` | empty (auto), `new`, `old` | `--tls-alps <draft>` | ✓ TLS |
+| `tls_server_padding` | empty | `--tls-server-padding <n>` | ✓ TLS |
+| `disable_grease` | `0`, `1` | `--disable-grease` | ✓ TLS |
+| `disable_ocsp_stapling` | `0`, `1` | `--disable-ocsp-stapling` | ✓ TLS |
+| `disable_sct` | `0`, `1` | `--disable-sct` | ✓ TLS |
+| `disable_session_ticket` | `0`, `1` | `--disable-session-ticket` | ✓ TLS |
+| `disable_extension_permutation` | `0`, `1` | `--disable-extension-permutation` | ✓ TLS |
+| `tls_verify` | `auto`, `1`, `0` | `AETHER_TLS_VERIFY` env / `--tls-verify` | ✓ TLS |
+| `api_address` | empty | `--api-address <ip:port>` | ✓ Advanced |
+| `api_host` | empty | `--api-host <host>` | ✓ Advanced |
+| `api_sni` | empty | `--api-sni <sni>` | ✓ Advanced |
+| `masque_sni` | empty | `--masque-sni <sni>` | ✓ Advanced |
 | `no_quic_v2` | `0` (opener on), `1` | `--no-quic-v2` | ✓ (inverted as "QUIC v2 Opener") |
 | `no_data_check` | `0`, `1` | `--no-data-check` | ✓ |
 | `keepalive` | `5` | `--keepalive` (wg) | ✓ Advanced |
@@ -85,9 +120,6 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `access_email` | empty | `AETHER_ACCESS_EMAIL` (runtime env) | ✓ Advanced |
 | `enroll_address` | empty | `--enroll-address <host>` | ✓ Advanced |
 | `gateway` | `0`, `1` | `--gateway` (with `team`) | ✓ Advanced |
-| `tls_ciphers` | empty | `--tls-ciphers <list>` | ✓ Circumvention |
-| `disable_grease` | `0`, `1` | `--disable-grease` | ✓ Circumvention |
-| `tls_verify` | `0`, `1` | `--tls-verify` | ✓ Circumvention |
 | `tor_bind` / `tor_dir` | empty | `--tor-bind` / `--tor-dir` | ✓ Advanced |
 | `tor_http` | empty | `--tor-http` | ✓ Advanced |
 | `tor_bridges` | empty (auto), `on`, `off` | `--tor-bridges` / `--no-tor-bridges` | ✓ Advanced |
@@ -114,7 +146,6 @@ aether-ctl zeptun-remove [path]       # delete the engine binary (stops routing 
 | `stats_secs` | empty (60) | `--stats-secs <n>` | ✓ Advanced |
 | `validate_secs` / `startup_secs` / `reconnect_secs` | empty (core defaults) | `--validate-secs` / `--startup-secs` / `--reconnect-secs` | ✓ Advanced |
 | `perf` | empty (auto), `low`, `medium`, `high` | `--perf <profile>` | ✓ Advanced |
-| `tls_groups` | empty | `--tls-groups <list>` | ✓ Advanced |
 | `log_level` | `info` | `--log-level <level>` | ✓ Advanced |
 | `extra_args` | empty | appended verbatim | ✓ Advanced |
 | `bin` | empty (auto-discover) | — (binary selector) | ✓ Settings |
@@ -152,20 +183,26 @@ All documented upstream flags now have a `set` key (see table above) except the 
 
 ```json
 {
-  "plugin_version": "1.9.0", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.3.0",
-  "core_pinned_version": "v2.3.0", "core_update_available": false,
-  "has_cap_net_admin": false, "running": true, "pid": "1234", "connected": true,
+  "plugin_version": "2.0.0", "installed": true, "binary": "/path/to/aether", "binary_version": "aether 2.4.0",
+  "core_pinned_version": "v2.4.0", "core_update_available": false,
+  "has_cap_net_admin": true, "running": true, "pid": "1234", "connected": true,
   "ip": "104.28.x.x", "colo": "FRA", "loc": "IR", "warp": "on", "latency_ms": 1091,
   "proxy_port": 1819, "http_proxy_port": 0,
   "protocol": "masque", "scan": "balanced", "noize": "firewall", "ip_mode": "v4",
-  "h2": false, "fragment": true, "quick_reconnect": true, "mark_enabled": false,
-  "no_quic_v2": false, "ech": "off", "ech_dns": "", "ech_domain": "", "no_data_check": false, "keepalive": 5,
-  "peer": "", "gool_peer": "", "api_fragment": false,
-  "wiw_outer": "", "wiw_inner": "", "mim_outer": "", "mim_inner": "",
+  "h2": false, "fragment": true, "fragment_size": "8-16", "fragment_delay": "2-10",
+  "quick_reconnect": true, "mark_enabled": true,
+  "no_quic_v2": false, "ech": "off", "ech_dns": "", "ech_domain": "", "enable_ech_grease": false,
+  "no_data_check": false, "keepalive": 5,
+  "peer": "", "gool_peer": "", "wiw_outer": "", "wiw_inner": "", "mim_outer": "", "mim_inner": "",
   "dns": "", "team": "", "upstream": "", "route_direct": "", "route_block": "",
   "log_level": "info", "wg_peer": "", "h2_peer": "", "no_profile_retry": false,
   "validate_secs": "", "startup_secs": "", "reconnect_secs": "", "perf": "",
-  "tls_groups": "", "tls_ciphers": "", "disable_grease": false, "tls_verify": false, "enroll_address": "", "routes_file": "",
+  "tls13_ciphers": "", "tls_ciphers": "", "tls_groups": "", "tls_key_shares": "", "tls_sigalgs": "",
+  "enable_grease_sigalgs": false, "tls_cert_compression": "", "tls_alps": "", "tls_server_padding": "",
+  "disable_grease": false, "disable_ocsp_stapling": false, "disable_sct": false,
+  "disable_session_ticket": false, "disable_extension_permutation": false,
+  "tls_verify": "auto", "api_address": "", "api_host": "", "api_sni": "", "masque_sni": "",
+  "enroll_address": "", "routes_file": "",
   "tor_bind": "", "tor_http": "", "tor_dir": "", "tor_bridges": "", "tor_bridge": "",
   "tor_bridge_file": "", "tor_relays": "", "tor_relay_ports": "", "tor_pt": "", "tor_pt_dir": "", "tor_country": "",
   "psiphon_mode": "auto", "psiphon_region": "", "psiphon_bind": "", "psiphon_http": "",
@@ -175,7 +212,8 @@ All documented upstream flags now have a `set` key (see table above) except the 
   "discovered_cores": ["/path/to/aether"],
   "zeptun_state": "DISABLED", "zeptun_available": true,
   "zeptun_binary": "/home/user/.local/share/omarchy-aether/bin/zeptun",
-  "zeptun_pid": "", "zeptun_tun": "zeptun0", "zeptun_has_cap_net_admin": false,
+  "zeptun_version": "zeptun 1.1.3", "zeptun_pinned_version": "v1.1.3", "zeptun_update_available": false,
+  "zeptun_pid": "", "zeptun_tun": "zeptun0", "zeptun_has_cap_net_admin": true,
   "zeptun_retries": 0, "zeptun_uptime_s": 0, "zeptun_error": "",
   "sysroute_enabled": false, "sysroute_ipv6": false,
   "sysroute_dns_mode": "systemd_resolved", "sysroute_dns_servers": "1.1.1.1, 8.8.8.8",
@@ -190,7 +228,7 @@ All documented upstream flags now have a `set` key (see table above) except the 
 }
 ```
 
-`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **2.3.0** flag set.
+`discovered_cores` lists every valid Aether binary found, in priority order: the custom path, `~/.local/share/omarchy-aether/bin/`, `~/Downloads/Aether/`, the plugin's own `bin/`, `~/.local/bin`, `/usr/local/bin`, `/opt/aether`, then each `aether` on `PATH` (`which -a`). Detection runs `<bin> --help` and requires SOCKS5 in the output, which filters out the unrelated `aether` theme tool shipped in some repos. The plugin tracks the upstream core **v2.4.0** and Zeptun **v1.1.3** flag set.
 
 ### Core remove
 
@@ -241,7 +279,7 @@ States: `DISABLED → STOPPED → STARTING → RUNNING → STOPPING → FAILED`,
 
 - Routing uses Zeptun's native `auto_route` against a generated TOML config — the integration writes no route or firewall commands of its own beyond teardown of its two reserved resources: the `zeptun0` interface and policy rules for table `8891`. No global flushes, ever.
 - **Loop prevention:** the core is (re)started with `--mark 0xff` (the mark is inert without TUN routing; the panel surfaces this on first activation). Zeptun's policy rules exclude fwmark `255` packets, so the core's upstream sockets exit directly. Additionally the established remote IPs of the core and its child processes (the Psiphon transport runs as `psiphon-tunnel-core`) are probed (`ss`, 2 s bound) and excluded, and LAN/link-local/multicast ranges are always excluded.
-- **Child processes and the mark:** `SO_MARK` is a per-socket attribute and is **not inherited across `exec`**. Everything dialed by the core itself (WARP tunnels, the in-process Tor client, loopback dials) is protected by the mark, but child helper processes are not: every Psiphon transport spawns `psiphon-tunnel-core`, and Tor with bridges spawns pluggable-transport helpers (`obfs4proxy`/`lyrebird`/`snowflake-client`, found next to the core in `pt/`, in Tor Browser's dirs, or on `PATH`). When such a helper dials the internet directly, the address snapshot taken at routing start is its only loop protection — endpoints it dials later (rotated bridges, Psiphon edges chosen after connect) are not in the snapshot and would be captured by the TUN and detoured through it. If routing or the transport is restarted, the snapshot refreshes; until then treat a mid-session helper re-dial as a known edge case, not a crash loop — zeptun queues the packet into the tunnel, so traffic still flows, just over the wrong exit.
+- **Child processes and the mark:** `SO_MARK` is a per-socket attribute and is **not inherited across `exec`**. Everything dialed by the core itself (WARP tunnels, the in-process Tor client, loopback dials) is protected by the mark, but child helper processes are not: every Psiphon transport spawns `psiphon-tunnel-core`, and Tor with bridges spawns pluggable-transport helpers (`obfs4proxy`/`lyrebird`/`snowflake-client`). Unmarked child helper connections can loop back into `zeptun0`. Furthermore, Tor and Psiphon SOCKS5 proxies do not support `UDP ASSOCIATE`, causing native UDP queries and QUIC over `zeptun0` to fail. The Routing tab includes a dedicated warning card with a 1-click mitigation button (`sysroute_fake_ip=1` and `sysroute_udp_mode=tcp`). For an in-depth breakdown and UID bypass strategies, see [docs/SYSTEM-ROUTING.md](docs/SYSTEM-ROUTING.md).
 - **DNS handling & anti-poisoning:** in `systemd_resolved` mode (default), the plugin configures `resolvectl` on the TUN link with routing domain `~.` pointing at the configured `sysroute_dns_servers` (default `1.1.1.1, 8.8.8.8`) and flushes cache on connect/disconnect. This prevents local ISP DNS poisoning (which blocks sites like YouTube and X) without editing `/etc/resolv.conf`. Alternatively, `fake_ip` resolves domains remotely via SOCKS5, and `hijack` routes port 53 into the tunnel.
 - **Engine tuning:** `sysroute_preset` toggles Desktop (high performance), Mobile (lightweight), and Server (high concurrency) engine profiles; `sysroute_mtu` allows tuning the interface MTU to mitigate network fragmentation.
 - **IPv6:** with `sysroute_ipv6` off, the TUN carries IPv4 only and strict route **blocks** IPv6 rather than leaking it; turn on IPv4+IPv6 to carry both families.
@@ -278,7 +316,7 @@ omarchy restart shell
 ~/.config/omarchy/plugins/cluvex.aether/bin/aether-ctl set-protocol masque 0
 ```
 
-Before sharing, test: bar icon states across connect/disconnect/missing-core, all three tabs, mouse buttons, Escape close, IPC commands, plugin disable/re-enable, shell restart, and removal.
+Before sharing, test: bar icon states across connect/disconnect/missing-core, all four tabs, mouse buttons, Escape close, IPC commands, plugin disable/re-enable, shell restart, and removal.
 
 ## Publishing checklist
 

@@ -41,8 +41,8 @@ DEFAULT_UPSTREAM=""
 DEFAULT_MARK="0"
 DEFAULT_QUICK_RECONNECT=1
 DEFAULT_H2=0
-DEFAULT_FRAGMENT=1
-DEFAULT_FRAGMENT_SIZE="16-32"
+DEFAULT_FRAGMENT=0
+DEFAULT_FRAGMENT_SIZE="8-16"
 DEFAULT_FRAGMENT_DELAY="2-10"
 DEFAULT_NO_QUIC_V2=0
 DEFAULT_ECH="off"
@@ -52,7 +52,6 @@ DEFAULT_NO_DATA_CHECK=0
 DEFAULT_KEEPALIVE=5
 DEFAULT_PEER=""
 DEFAULT_GOOL_PEER=""
-DEFAULT_API_FRAGMENT=0
 DEFAULT_WIW_OUTER=""
 DEFAULT_WIW_INNER=""
 DEFAULT_MIM_OUTER=""
@@ -74,9 +73,25 @@ DEFAULT_RECONNECT_SECS=""
 DEFAULT_PERF=""
 DEFAULT_TLS_GROUPS=""
 DEFAULT_TLS_CIPHERS=""
+DEFAULT_TLS13_CIPHERS=""
+DEFAULT_TLS_KEY_SHARES=""
+DEFAULT_TLS_SIGALGS=""
+DEFAULT_ENABLE_GREASE_SIGALGS=0
+DEFAULT_TLS_CERT_COMPRESSION=""
+DEFAULT_TLS_ALPS=""
+DEFAULT_TLS_TRUST_ANCHORS=""
+DEFAULT_TLS_SERVER_PADDING=""
+DEFAULT_ENABLE_ECH_GREASE=0
+DEFAULT_DISABLE_OCSP_STAPLING=0
+DEFAULT_DISABLE_SCT=0
+DEFAULT_DISABLE_SESSION_TICKET=0
+DEFAULT_DISABLE_EXTENSION_PERMUTATION=0
 DEFAULT_DISABLE_GREASE=0
-DEFAULT_TLS_VERIFY=0
-DEFAULT_ENROLL_ADDRESS=""
+DEFAULT_TLS_VERIFY="auto"
+DEFAULT_API_ADDRESS=""
+DEFAULT_API_HOST=""
+DEFAULT_API_SNI=""
+DEFAULT_MASQUE_SNI=""
 DEFAULT_ROUTES_FILE=""
 DEFAULT_TOR_BIND=""
 DEFAULT_TOR_DIR=""
@@ -85,8 +100,8 @@ DEFAULT_TOR_BRIDGE=""
 DEFAULT_TOR_PT=""
 DEFAULT_TOR_PT_DIR=""
 DEFAULT_TOR_COUNTRY=""
-DEFAULT_TOR_RELAYS=""
-DEFAULT_TOR_RELAY_PORTS=""
+DEFAULT_TOR_RELAYS="auto"
+DEFAULT_TOR_RELAY_PORTS="web"
 DEFAULT_TOR_BRIDGE_FILE=""
 DEFAULT_TOR_HTTP=""
 DEFAULT_PSIPHON_MODE="auto"
@@ -136,6 +151,16 @@ load_config() {
     source "$CONFIG_FILE"
   fi
 
+  # Migrate legacy 1.x / 2.3 keys
+  if [[ -n "${AETHER_CFG_ENROLL_ADDRESS:-}" && -z "${AETHER_CFG_API_ADDRESS:-}" ]]; then
+    AETHER_CFG_API_ADDRESS="$AETHER_CFG_ENROLL_ADDRESS"
+    unset AETHER_CFG_ENROLL_ADDRESS 2>/dev/null || true
+  fi
+  if [[ "${AETHER_CFG_API_FRAGMENT:-0}" == "1" && "${AETHER_CFG_FRAGMENT:-0}" == "0" ]]; then
+    AETHER_CFG_FRAGMENT="1"
+    unset AETHER_CFG_API_FRAGMENT 2>/dev/null || true
+  fi
+
   CUSTOM_BIN="${AETHER_CFG_BIN:-$DEFAULT_CUSTOM_BIN}"
   PROTOCOL="${AETHER_CFG_PROTOCOL:-$DEFAULT_PROTOCOL}"
   SCAN="${AETHER_CFG_SCAN:-$DEFAULT_SCAN}"
@@ -158,7 +183,6 @@ load_config() {
   KEEPALIVE="${AETHER_CFG_KEEPALIVE:-$DEFAULT_KEEPALIVE}"
   PEER="${AETHER_CFG_PEER:-$DEFAULT_PEER}"
   GOOL_PEER="${AETHER_CFG_GOOL_PEER:-$DEFAULT_GOOL_PEER}"
-  API_FRAGMENT="${AETHER_CFG_API_FRAGMENT:-$DEFAULT_API_FRAGMENT}"
   WIW_OUTER="${AETHER_CFG_WIW_OUTER:-$DEFAULT_WIW_OUTER}"
   WIW_INNER="${AETHER_CFG_WIW_INNER:-$DEFAULT_WIW_INNER}"
   MIM_OUTER="${AETHER_CFG_MIM_OUTER:-$DEFAULT_MIM_OUTER}"
@@ -180,9 +204,25 @@ load_config() {
   PERF="${AETHER_CFG_PERF:-$DEFAULT_PERF}"
   TLS_GROUPS="${AETHER_CFG_TLS_GROUPS:-$DEFAULT_TLS_GROUPS}"
   TLS_CIPHERS="${AETHER_CFG_TLS_CIPHERS:-$DEFAULT_TLS_CIPHERS}"
+  TLS13_CIPHERS="${AETHER_CFG_TLS13_CIPHERS:-$DEFAULT_TLS13_CIPHERS}"
+  TLS_KEY_SHARES="${AETHER_CFG_TLS_KEY_SHARES:-$DEFAULT_TLS_KEY_SHARES}"
+  TLS_SIGALGS="${AETHER_CFG_TLS_SIGALGS:-$DEFAULT_TLS_SIGALGS}"
+  ENABLE_GREASE_SIGALGS="${AETHER_CFG_ENABLE_GREASE_SIGALGS:-$DEFAULT_ENABLE_GREASE_SIGALGS}"
+  TLS_CERT_COMPRESSION="${AETHER_CFG_TLS_CERT_COMPRESSION:-$DEFAULT_TLS_CERT_COMPRESSION}"
+  TLS_ALPS="${AETHER_CFG_TLS_ALPS:-$DEFAULT_TLS_ALPS}"
+  TLS_TRUST_ANCHORS="${AETHER_CFG_TLS_TRUST_ANCHORS:-$DEFAULT_TLS_TRUST_ANCHORS}"
+  TLS_SERVER_PADDING="${AETHER_CFG_TLS_SERVER_PADDING:-$DEFAULT_TLS_SERVER_PADDING}"
+  ENABLE_ECH_GREASE="${AETHER_CFG_ENABLE_ECH_GREASE:-$DEFAULT_ENABLE_ECH_GREASE}"
+  DISABLE_OCSP_STAPLING="${AETHER_CFG_DISABLE_OCSP_STAPLING:-$DEFAULT_DISABLE_OCSP_STAPLING}"
+  DISABLE_SCT="${AETHER_CFG_DISABLE_SCT:-$DEFAULT_DISABLE_SCT}"
+  DISABLE_SESSION_TICKET="${AETHER_CFG_DISABLE_SESSION_TICKET:-$DEFAULT_DISABLE_SESSION_TICKET}"
+  DISABLE_EXTENSION_PERMUTATION="${AETHER_CFG_DISABLE_EXTENSION_PERMUTATION:-$DEFAULT_DISABLE_EXTENSION_PERMUTATION}"
   DISABLE_GREASE="${AETHER_CFG_DISABLE_GREASE:-$DEFAULT_DISABLE_GREASE}"
   TLS_VERIFY="${AETHER_CFG_TLS_VERIFY:-$DEFAULT_TLS_VERIFY}"
-  ENROLL_ADDRESS="${AETHER_CFG_ENROLL_ADDRESS:-$DEFAULT_ENROLL_ADDRESS}"
+  API_ADDRESS="${AETHER_CFG_API_ADDRESS:-$DEFAULT_API_ADDRESS}"
+  API_HOST="${AETHER_CFG_API_HOST:-$DEFAULT_API_HOST}"
+  API_SNI="${AETHER_CFG_API_SNI:-$DEFAULT_API_SNI}"
+  MASQUE_SNI="${AETHER_CFG_MASQUE_SNI:-$DEFAULT_MASQUE_SNI}"
   ROUTES_FILE="${AETHER_CFG_ROUTES_FILE:-$DEFAULT_ROUTES_FILE}"
   TOR_BIND="${AETHER_CFG_TOR_BIND:-$DEFAULT_TOR_BIND}"
   TOR_DIR="${AETHER_CFG_TOR_DIR:-$DEFAULT_TOR_DIR}"
@@ -269,7 +309,6 @@ save_config() {
     printf 'AETHER_CFG_KEEPALIVE=%q\n' "$KEEPALIVE"
     printf 'AETHER_CFG_PEER=%q\n' "$PEER"
     printf 'AETHER_CFG_GOOL_PEER=%q\n' "$GOOL_PEER"
-    printf 'AETHER_CFG_API_FRAGMENT=%q\n' "$API_FRAGMENT"
     printf 'AETHER_CFG_WIW_OUTER=%q\n' "$WIW_OUTER"
     printf 'AETHER_CFG_WIW_INNER=%q\n' "$WIW_INNER"
     printf 'AETHER_CFG_MIM_OUTER=%q\n' "$MIM_OUTER"
@@ -291,9 +330,25 @@ save_config() {
     printf 'AETHER_CFG_PERF=%q\n' "$PERF"
     printf 'AETHER_CFG_TLS_GROUPS=%q\n' "$TLS_GROUPS"
     printf 'AETHER_CFG_TLS_CIPHERS=%q\n' "$TLS_CIPHERS"
+    printf 'AETHER_CFG_TLS13_CIPHERS=%q\n' "$TLS13_CIPHERS"
+    printf 'AETHER_CFG_TLS_KEY_SHARES=%q\n' "$TLS_KEY_SHARES"
+    printf 'AETHER_CFG_TLS_SIGALGS=%q\n' "$TLS_SIGALGS"
+    printf 'AETHER_CFG_ENABLE_GREASE_SIGALGS=%q\n' "$ENABLE_GREASE_SIGALGS"
+    printf 'AETHER_CFG_TLS_CERT_COMPRESSION=%q\n' "$TLS_CERT_COMPRESSION"
+    printf 'AETHER_CFG_TLS_ALPS=%q\n' "$TLS_ALPS"
+    printf 'AETHER_CFG_TLS_TRUST_ANCHORS=%q\n' "$TLS_TRUST_ANCHORS"
+    printf 'AETHER_CFG_TLS_SERVER_PADDING=%q\n' "$TLS_SERVER_PADDING"
+    printf 'AETHER_CFG_ENABLE_ECH_GREASE=%q\n' "$ENABLE_ECH_GREASE"
+    printf 'AETHER_CFG_DISABLE_OCSP_STAPLING=%q\n' "$DISABLE_OCSP_STAPLING"
+    printf 'AETHER_CFG_DISABLE_SCT=%q\n' "$DISABLE_SCT"
+    printf 'AETHER_CFG_DISABLE_SESSION_TICKET=%q\n' "$DISABLE_SESSION_TICKET"
+    printf 'AETHER_CFG_DISABLE_EXTENSION_PERMUTATION=%q\n' "$DISABLE_EXTENSION_PERMUTATION"
     printf 'AETHER_CFG_DISABLE_GREASE=%q\n' "$DISABLE_GREASE"
     printf 'AETHER_CFG_TLS_VERIFY=%q\n' "$TLS_VERIFY"
-    printf 'AETHER_CFG_ENROLL_ADDRESS=%q\n' "$ENROLL_ADDRESS"
+    printf 'AETHER_CFG_API_ADDRESS=%q\n' "$API_ADDRESS"
+    printf 'AETHER_CFG_API_HOST=%q\n' "$API_HOST"
+    printf 'AETHER_CFG_API_SNI=%q\n' "$API_SNI"
+    printf 'AETHER_CFG_MASQUE_SNI=%q\n' "$MASQUE_SNI"
     printf 'AETHER_CFG_ROUTES_FILE=%q\n' "$ROUTES_FILE"
     printf 'AETHER_CFG_TOR_BIND=%q\n' "$TOR_BIND"
     printf 'AETHER_CFG_TOR_DIR=%q\n' "$TOR_DIR"
@@ -929,7 +984,16 @@ zeptun_loop_guards() {
     local child
     while IFS= read -r child; do
       [[ -n "$child" ]] && guard_pids+=("$child")
+      local subchild
+      while IFS= read -r subchild; do
+        [[ -n "$subchild" ]] && guard_pids+=("$subchild")
+      done < <(pgrep -P "$child" 2>/dev/null || true)
     done < <(pgrep -P "$aether_pid" 2>/dev/null || true)
+    # Also include any known helper processes running from our BIN_DIR
+    local pt_pid
+    while IFS= read -r pt_pid; do
+      [[ -n "$pt_pid" ]] && guard_pids+=("$pt_pid")
+    done < <(pgrep -f "lyrebird|psiphon-tunnel-core" 2>/dev/null || true)
     local pid_list
     pid_list=$(IFS='|'; echo "${guard_pids[*]}")
     # ss -tnp: State Recv-Q Send-Q Local Peer ... -> peer is column 5.
@@ -948,8 +1012,16 @@ zeptun_loop_guards() {
 zeptun_write_conf() {
   local socks_server
   socks_server=$(tun_egress_addr)
+  local egress_kind
+  egress_kind=$(tun_egress_kind)
   local address v6="${SYSROUTE_IPV6}" dns_mode="${SYSROUTE_DNS_MODE}" udp_mode="${SYSROUTE_UDP_MODE}"
   local preset="${SYSROUTE_PRESET:-desktop}" mtu="${SYSROUTE_MTU:-1500}"
+
+  # Tor and Psiphon SOCKS5 endpoints do not support UDP ASSOCIATE (CONNECT only).
+  # Auto-adjust udp_mode to "tcp" to avoid UDP loops and failed lookups.
+  if [[ "$egress_kind" == "tor" || "$egress_kind" == "psiphon" ]]; then
+    udp_mode="tcp"
+  fi
 
   if [[ "$v6" == "1" ]]; then
     address='address = ["172.19.0.1/30", "fdfe:dcba:9876::1/126"]'
@@ -1484,17 +1556,6 @@ build_args() {
         if [[ -n "$H2_PEER" ]]; then
           args+=("--h2-peer" "$H2_PEER")
         fi
-        if [[ "$FRAGMENT" == "1" ]]; then
-          args+=("--fragment")
-          if [[ -n "$FRAGMENT_SIZE" && "$FRAGMENT_SIZE" != "$DEFAULT_FRAGMENT_SIZE" ]]; then
-            args+=("--fragment-size" "$FRAGMENT_SIZE")
-          fi
-          if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
-            args+=("--fragment-delay" "$FRAGMENT_DELAY")
-          fi
-        else
-          args+=("--no-fragment")
-        fi
       else
         if [[ "$NO_QUIC_V2" == "1" ]]; then
           args+=("--no-quic-v2")
@@ -1558,17 +1619,6 @@ build_args() {
       args+=("--mim")
       if [[ "$H2" == "1" ]]; then
         args+=("--h2")
-        if [[ "$FRAGMENT" == "1" ]]; then
-          args+=("--fragment")
-          if [[ -n "$FRAGMENT_SIZE" && "$FRAGMENT_SIZE" != "$DEFAULT_FRAGMENT_SIZE" ]]; then
-            args+=("--fragment-size" "$FRAGMENT_SIZE")
-          fi
-          if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
-            args+=("--fragment-delay" "$FRAGMENT_DELAY")
-          fi
-        else
-          args+=("--no-fragment")
-        fi
       fi
       if [[ -n "$MIM_OUTER" && -n "$MIM_INNER" ]]; then
         args+=("--mim-outer" "$MIM_OUTER" "--mim-inner" "$MIM_INNER")
@@ -1749,24 +1799,82 @@ build_args() {
     fi
   fi
 
-  if [[ "$API_FRAGMENT" == "1" ]]; then
-    args+=("--api-fragment")
+  # ClientHello fragmentation (HTTP/2 transport & WARP API calls across all transports)
+  if [[ "$FRAGMENT" == "1" ]]; then
+    args+=("--fragment")
+    if [[ -n "$FRAGMENT_SIZE" && "$FRAGMENT_SIZE" != "$DEFAULT_FRAGMENT_SIZE" ]]; then
+      args+=("--fragment-size" "$FRAGMENT_SIZE")
+    fi
+    if [[ -n "$FRAGMENT_DELAY" && "$FRAGMENT_DELAY" != "$DEFAULT_FRAGMENT_DELAY" ]]; then
+      args+=("--fragment-delay" "$FRAGMENT_DELAY")
+    fi
+  fi
+
+  # WARP API and MASQUE connection customization
+  if [[ -n "$API_ADDRESS" ]]; then
+    args+=("--api-address" "$API_ADDRESS")
+  fi
+  if [[ -n "$API_HOST" ]]; then
+    args+=("--api-host" "$API_HOST")
+  fi
+  if [[ -n "$API_SNI" ]]; then
+    args+=("--api-sni" "$API_SNI")
+  fi
+  if [[ -n "$MASQUE_SNI" ]]; then
+    args+=("--masque-sni" "$MASQUE_SNI")
+  fi
+
+  # TLS Fingerprint & BoringSSL shaping
+  if [[ "$TLS_VERIFY" == "1" ]]; then
+    args+=("--tls-verify")
   fi
   if [[ -n "$TLS_CIPHERS" ]]; then
     args+=("--tls-ciphers" "$TLS_CIPHERS")
   fi
-  if [[ "$DISABLE_GREASE" == "1" ]]; then
-    args+=("--disable-grease")
+  if [[ -n "$TLS13_CIPHERS" ]]; then
+    args+=("--tls13-ciphers" "$TLS13_CIPHERS")
   fi
-  if [[ "$TLS_VERIFY" == "1" ]]; then
-    args+=("--tls-verify")
-  fi
-  if [[ -n "$ENROLL_ADDRESS" ]]; then
-    args+=("--enroll-address" "$ENROLL_ADDRESS")
-  fi
-
   if [[ -n "$TLS_GROUPS" ]]; then
     args+=("--tls-groups" "$TLS_GROUPS")
+  fi
+  if [[ -n "$TLS_KEY_SHARES" ]]; then
+    args+=("--tls-key-shares" "$TLS_KEY_SHARES")
+  fi
+  if [[ -n "$TLS_SIGALGS" ]]; then
+    args+=("--tls-sigalgs" "$TLS_SIGALGS")
+  fi
+  if [[ "$ENABLE_GREASE_SIGALGS" == "1" ]]; then
+    args+=("--enable-grease-sigalgs")
+  fi
+  if [[ -n "$TLS_CERT_COMPRESSION" ]]; then
+    args+=("--tls-cert-compression" "$TLS_CERT_COMPRESSION")
+  fi
+  if [[ -n "$TLS_ALPS" ]]; then
+    args+=("--tls-alps" "$TLS_ALPS")
+  fi
+  if [[ -n "$TLS_TRUST_ANCHORS" ]]; then
+    args+=("--tls-trust-anchors" "$TLS_TRUST_ANCHORS")
+  fi
+  if [[ -n "$TLS_SERVER_PADDING" ]]; then
+    args+=("--tls-server-padding" "$TLS_SERVER_PADDING")
+  fi
+  if [[ "$ENABLE_ECH_GREASE" == "1" ]]; then
+    args+=("--enable-ech-grease")
+  fi
+  if [[ "$DISABLE_OCSP_STAPLING" == "1" ]]; then
+    args+=("--disable-ocsp-stapling")
+  fi
+  if [[ "$DISABLE_SCT" == "1" ]]; then
+    args+=("--disable-sct")
+  fi
+  if [[ "$DISABLE_SESSION_TICKET" == "1" ]]; then
+    args+=("--disable-session-ticket")
+  fi
+  if [[ "$DISABLE_EXTENSION_PERMUTATION" == "1" ]]; then
+    args+=("--disable-extension-permutation")
+  fi
+  if [[ "$DISABLE_GREASE" == "1" ]]; then
+    args+=("--disable-grease")
   fi
   if [[ -n "$PERF" ]]; then
     args+=("--perf" "$PERF")
@@ -1831,6 +1939,15 @@ setup_core_env() {
     export AETHER_ACCESS_EMAIL="$ACCESS_EMAIL"
   else
     unset AETHER_ACCESS_EMAIL 2>/dev/null || true
+  fi
+
+  # TLS verification: on by default with --team; AETHER_TLS_VERIFY=0 disables it.
+  if [[ "$TLS_VERIFY" == "0" ]]; then
+    export AETHER_TLS_VERIFY="0"
+  elif [[ "$TLS_VERIFY" == "1" ]]; then
+    export AETHER_TLS_VERIFY="1"
+  else
+    unset AETHER_TLS_VERIFY 2>/dev/null || true
   fi
 }
 
@@ -1992,6 +2109,13 @@ cmd_status() {
   local plug_version
   plug_version=$(get_plugin_version)
 
+  local egress_kind
+  egress_kind=$(tun_egress_kind)
+  local tor_psiphon_warning=""
+  if [[ "$SYSROUTE_ENABLED" == "1" && "$egress_kind" != "warp" ]]; then
+    tor_psiphon_warning="Tor/Psiphon egress carries TCP only. Pluggable transport helpers do not inherit SO_MARK across exec. Enable Fake IP and exclude helper UIDs to prevent loops."
+  fi
+
   cat <<EOF
 {
   "plugin_version": $(json_str "$plug_version"),
@@ -2033,7 +2157,7 @@ cmd_status() {
   "keepalive": $(json_num "$KEEPALIVE" 5),
   "peer": $(json_str "$PEER"),
   "gool_peer": $(json_str "$GOOL_PEER"),
-  "api_fragment": $( [[ "$API_FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
+  "api_fragment": $( [[ "$FRAGMENT" == "1" ]] && echo "true" || echo "false" ),
   "wiw_outer": $(json_str "$WIW_OUTER"),
   "wiw_inner": $(json_str "$WIW_INNER"),
   "mim_outer": $(json_str "$MIM_OUTER"),
@@ -2054,9 +2178,26 @@ cmd_status() {
   "perf": $(json_str "$PERF"),
   "tls_groups": $(json_str "$TLS_GROUPS"),
   "tls_ciphers": $(json_str "$TLS_CIPHERS"),
+  "tls13_ciphers": $(json_str "$TLS13_CIPHERS"),
+  "tls_key_shares": $(json_str "$TLS_KEY_SHARES"),
+  "tls_sigalgs": $(json_str "$TLS_SIGALGS"),
+  "enable_grease_sigalgs": $( [[ "$ENABLE_GREASE_SIGALGS" == "1" ]] && echo "true" || echo "false" ),
+  "tls_cert_compression": $(json_str "$TLS_CERT_COMPRESSION"),
+  "tls_alps": $(json_str "$TLS_ALPS"),
+  "tls_trust_anchors": $(json_str "$TLS_TRUST_ANCHORS"),
+  "tls_server_padding": $(json_str "$TLS_SERVER_PADDING"),
+  "enable_ech_grease": $( [[ "$ENABLE_ECH_GREASE" == "1" ]] && echo "true" || echo "false" ),
+  "disable_ocsp_stapling": $( [[ "$DISABLE_OCSP_STAPLING" == "1" ]] && echo "true" || echo "false" ),
+  "disable_sct": $( [[ "$DISABLE_SCT" == "1" ]] && echo "true" || echo "false" ),
+  "disable_session_ticket": $( [[ "$DISABLE_SESSION_TICKET" == "1" ]] && echo "true" || echo "false" ),
+  "disable_extension_permutation": $( [[ "$DISABLE_EXTENSION_PERMUTATION" == "1" ]] && echo "true" || echo "false" ),
   "disable_grease": $( [[ "$DISABLE_GREASE" == "1" ]] && echo "true" || echo "false" ),
-  "tls_verify": $( [[ "$TLS_VERIFY" == "1" ]] && echo "true" || echo "false" ),
-  "enroll_address": $(json_str "$ENROLL_ADDRESS"),
+  "tls_verify": $(json_str "$TLS_VERIFY"),
+  "api_address": $(json_str "$API_ADDRESS"),
+  "enroll_address": $(json_str "$API_ADDRESS"),
+  "api_host": $(json_str "$API_HOST"),
+  "api_sni": $(json_str "$API_SNI"),
+  "masque_sni": $(json_str "$MASQUE_SNI"),
   "routes_file": $(json_str "$ROUTES_FILE"),
   "tor_bind": $(json_str "$TOR_BIND"),
   "tor_http": $(json_str "$TOR_HTTP"),
@@ -2125,6 +2266,7 @@ cmd_status() {
   "sysroute_log_level": $(json_str "$SYSROUTE_LOG_LEVEL"),
   "sysroute_egress": $(json_str "$(tun_egress_addr)"),
   "sysroute_egress_kind": $(json_str "$(tun_egress_kind)"),
+  "sysroute_tor_psiphon_warning": $(json_str "$tor_psiphon_warning"),
   "discovered_cores": $cores_json
 }
 EOF
@@ -2265,25 +2407,24 @@ cmd_foreground() {  local bin
 # or compromised upstream release cannot silently replace the reviewed core.
 # To upgrade: bump AETHER_CORE_VERSION, re-download the new assets, and
 # replace the hashes with the values from the release's *.sha256 sidecars.
-AETHER_CORE_VERSION="v2.3.0"
-# Pinned archives are ~15 MiB; the cap rejects truncated or padded responses.
+AETHER_CORE_VERSION="v2.4.0"
+# Pinned archives are ~15-25 MiB; the cap rejects truncated or padded responses.
 AETHER_CORE_MAX_BYTES=$((64 * 1024 * 1024))
 
 core_expected_sha256() {
   case "$1" in
-    aether-linux-x86_64.tar.gz) echo "77c6ce41695a616660d834b55be235c17e7588a474dfd737b71ca80b685bdc8a" ;;
-    aether-linux-arm64.tar.gz)  echo "7251cbb90c4a0eccb62412727ebee9f0a7b775d20d26492c082ba5df64f8c21f" ;;
-    aether-linux-armv7.tar.gz)  echo "c7f41abb99676a866a9ef8fb3d3234e421740161765e6568ae185fa963d76b06" ;;
+    aether-linux-x86_64.tar.gz) echo "975e4efd46613ad51b7c62b2f5a73fc34fd9661cc15ed273ab816341bfcc2fd1" ;;
+    aether-linux-arm64.tar.gz)  echo "23a556b8ec0a234d6ed6517e7c9b9477e31889117f7b1958a382e9fa88c4bab8" ;;
+    aether-linux-armv7.tar.gz)  echo "5ce0214e18e52879059f664c29a69b8af5cf95b25ecb8905bf0667be3eb3d202" ;;
     *) return 1 ;;
   esac
 }
 
-# Extract a checksum-verified core archive into dest. Only the four members
-# of the pinned upstream tarball are accepted; anything else (absolute paths,
-# "..", links, unexpected files) aborts before anything is extracted.
+# Extract a checksum-verified core archive into dest. Only the members
+# of the pinned upstream tarball (binaries, pt helpers, and licenses) are
+# accepted; anything else (absolute paths, "..", links, unexpected files) aborts.
 extract_core_archive() {
   local archive="$1" dest="$2"
-  local expected_members=$'aether\npt/\npt/lyrebird\npt/psiphon-tunnel-core'
   local members entry line type_char
 
   if ! members=$(tar -tzf "$archive"); then
@@ -2291,29 +2432,42 @@ extract_core_archive() {
     return 1
   fi
 
-  if [[ "$members" != "$expected_members" ]]; then
-    echo "Error: archive layout does not match the pinned release (unexpected or extra members)." >&2
-    return 1
-  fi
+  # Path traversal and structure check
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if [[ "$entry" == /* || "$entry" == *".."* ]]; then
+      echo "Error: invalid or dangerous path detected in core archive: $entry" >&2
+      return 1
+    fi
+    case "$entry" in
+      aether|pt|pt/*|LICENSES|LICENSES/*) ;;
+      *)
+        echo "Error: archive contains unexpected member '$entry'." >&2
+        return 1
+        ;;
+    esac
+  done <<< "$members"
 
+  # Validate required executables and directories
   for entry in aether pt/ pt/lyrebird pt/psiphon-tunnel-core; do
-    # First character of `tar -tv` output is the type: '-' regular, 'd' dir,
-    # 'l' symlink, 'h' hardlink.
-    if ! line=$(tar -tvzf "$archive" "$entry"); then
+    if ! line=$(tar -tvzf "$archive" "$entry" 2>/dev/null); then
       echo "Error: expected member '$entry' missing from archive." >&2
       return 1
     fi
     type_char="${line:0:1}"
     case "$entry" in
       pt/) [[ "$type_char" == "d" ]] || { echo "Error: '$entry' is not a directory entry." >&2; return 1; } ;;
-      *)   [[ "$type_char" == "-" ]] || { echo "Error: '$entry' is not a regular file (links and devices are rejected)." >&2; return 1; } ;;
+      *)   [[ "$type_char" == "-" ]] || { echo "Error: '$entry' is not a regular file." >&2; return 1; } ;;
     esac
   done
 
-  # Every member is now verified, so extracting the archive can no longer
-  # pull in anything outside the pinned member list above.
+  # Every member is verified; extract cleanly
   tar -xzf "$archive" -C "$dest" --no-same-owner --no-same-permissions
   chmod 0755 "$dest/aether" "$dest/pt" "$dest/pt/lyrebird" "$dest/pt/psiphon-tunnel-core"
+  if [[ -d "$dest/LICENSES" ]]; then
+    chmod 0755 "$dest/LICENSES"
+    chmod 0644 "$dest"/LICENSES/* 2>/dev/null || true
+  fi
 }
 
 cmd_install() {
@@ -2379,11 +2533,14 @@ cmd_install() {
   fi
   rm -f "$tmp_file"
 
-  rm -rf "$BIN_DIR/pt"
+  rm -rf "$BIN_DIR/pt" "$BIN_DIR/LICENSES"
   mkdir -p "$BIN_DIR"
   mv "$staging/aether" "$BIN_DIR"/aether
   mv "$staging/pt" "$BIN_DIR"/pt
-  rmdir "$staging"
+  if [[ -d "$staging/LICENSES" ]]; then
+    mv "$staging/LICENSES" "$BIN_DIR"/LICENSES
+  fi
+  rmdir "$staging" 2>/dev/null || rm -rf "$staging"
 
   CUSTOM_BIN="$BIN_DIR/aether"
   save_config
@@ -2405,15 +2562,15 @@ cmd_install() {
 # The engine is executed, so its release is pinned and checksum-verified the
 # same way as the core. To upgrade: bump ZEPTUN_VERSION and replace the
 # hashes below with the values from the release's SHA256SUMS asset.
-ZEPTUN_VERSION="v1.1.1"
+ZEPTUN_VERSION="v1.1.3"
 ZEPTUN_MAX_BYTES=$((8 * 1024 * 1024))
 
 zeptun_expected_sha256() {
   case "$1" in
-    zeptun-linux-x86_64) echo "daafa86ce3239b2ba9614facbb9a60927dfc4a87d02f358062f25b8677bd9399" ;;
-    zeptun-linux-arm64)  echo "3d68d84dbb4539ee92d9bedcda3f36656206f575e036d7960507edddf957f84e" ;;
-    zeptun-linux-armv7)  echo "d848064e665f9f9624dd806986c2c9c02bdf424e67d5312eeaeacd862593e9e9" ;;
-    zeptun-linux-i686)   echo "2501bd3b40097d1a79a6a48d66567ff1bc2e6ccf471d3511f60c33044c41da74" ;;
+    zeptun-linux-x86_64) echo "6e007825868eade9590e7dfe14ee1a0f9af5331f9eeb15856bff7c2f0b940f7b" ;;
+    zeptun-linux-arm64)  echo "e031436dae4864a83587d0d834766ade0352960f5997f4141d0f221bd7bffd59" ;;
+    zeptun-linux-armv7)  echo "30916265a742ed2bec0fc66d43f3b22c1c0b4556ce771bc5f817cb602be7c9f7" ;;
+    zeptun-linux-i686)   echo "3fe1b3d2ffb640b640cbbdc3c20f78e57abf8fce651bc9da3e263b84c63ce8d0" ;;
     *) return 1 ;;
   esac
 }
@@ -2614,7 +2771,20 @@ cmd_set_config() {
     http_proxy_port)
       [[ "$val" =~ ^[0-9]+$ ]] && (( val <= 65535 )) || { echo "Error: http_proxy_port must be an integer between 0 and 65535." >&2; return 1; }
       HTTP_PROXY_PORT="$val" ;;
-    upstream) UPSTREAM="$val" ;;
+    upstream)
+      if [[ -n "$val" ]]; then
+        if [[ ! "$val" =~ ^(socks5|socks5h|http)://.+:[0-9]+$ ]]; then
+          echo "Error: upstream must be a valid URL with scheme (socks5://, socks5h://, http://), host, and non-zero port." >&2
+          return 1
+        fi
+        local u_port="${val##*:}"
+        if [[ "$u_port" == "0" ]]; then
+          echo "Error: upstream port cannot be 0." >&2
+          return 1
+        fi
+      fi
+      UPSTREAM="$val"
+      ;;
     mark) MARK="$val" ;;
     quick_reconnect) QUICK_RECONNECT="$val" ;;
     h2) H2="$val" ;;
@@ -2629,7 +2799,7 @@ cmd_set_config() {
       KEEPALIVE="$val" ;;
     peer) PEER="$val" ;;
     gool_peer) GOOL_PEER="$val" ;;
-    api_fragment) API_FRAGMENT="$val" ;;
+    api_fragment) FRAGMENT="$val" ;;
     wiw_outer) WIW_OUTER="$val" ;;
     wiw_inner) WIW_INNER="$val" ;;
     mim_outer) MIM_OUTER="$val" ;;
@@ -2651,9 +2821,35 @@ cmd_set_config() {
     perf) PERF="$val" ;;
     tls_groups) TLS_GROUPS="$val" ;;
     tls_ciphers) TLS_CIPHERS="$val" ;;
+    tls13_ciphers) TLS13_CIPHERS="$val" ;;
+    tls_key_shares) TLS_KEY_SHARES="$val" ;;
+    tls_sigalgs) TLS_SIGALGS="$val" ;;
+    enable_grease_sigalgs) ENABLE_GREASE_SIGALGS="$val" ;;
+    tls_cert_compression) TLS_CERT_COMPRESSION="$val" ;;
+    tls_alps)
+      case "$val" in
+        new|old|"") TLS_ALPS="$val" ;;
+        *) echo "Error: tls_alps must be new, old, or empty." >&2; return 1 ;;
+      esac ;;
+    tls_trust_anchors) TLS_TRUST_ANCHORS="$val" ;;
+    tls_server_padding)
+      [[ -z "$val" || "$val" =~ ^[0-9]+$ ]] || { echo "Error: tls_server_padding must be an integer." >&2; return 1; }
+      TLS_SERVER_PADDING="$val" ;;
+    enable_ech_grease) ENABLE_ECH_GREASE="$val" ;;
+    disable_ocsp_stapling) DISABLE_OCSP_STAPLING="$val" ;;
+    disable_sct) DISABLE_SCT="$val" ;;
+    disable_session_ticket) DISABLE_SESSION_TICKET="$val" ;;
+    disable_extension_permutation) DISABLE_EXTENSION_PERMUTATION="$val" ;;
     disable_grease) DISABLE_GREASE="$val" ;;
-    tls_verify) TLS_VERIFY="$val" ;;
-    enroll_address) ENROLL_ADDRESS="$val" ;;
+    tls_verify)
+      case "$val" in
+        auto|1|0) TLS_VERIFY="$val" ;;
+        *) echo "Error: tls_verify must be auto, 1, or 0." >&2; return 1 ;;
+      esac ;;
+    api_address|enroll_address) API_ADDRESS="$val" ;;
+    api_host) API_HOST="$val" ;;
+    api_sni) API_SNI="$val" ;;
+    masque_sni) MASQUE_SNI="$val" ;;
     ech_dns) ECH_DNS="$val" ;;
     ech_domain) ECH_DOMAIN="$val" ;;
     routes_file) ROUTES_FILE="$val" ;;
@@ -2927,7 +3123,7 @@ cmd_remove_core() {
     # Remove only the core's own files; the managed directory may also hold
     # the plugin-managed zeptun binary, which stays untouched.
     rm -f "$BIN_DIR/aether"
-    rm -rf "$BIN_DIR/pt"
+    rm -rf "$BIN_DIR/pt" "$BIN_DIR/LICENSES"
     rmdir "$BIN_DIR" 2>/dev/null || true
     echo "Removed managed core files from $BIN_DIR"
   else
@@ -2946,6 +3142,526 @@ cmd_remove_core() {
   rm -f "$RUN_DIR/cores.cache" 2>/dev/null || true
 }
 
+cmd_get_config() {
+  local key="${1:-}"
+  if [[ -z "$key" ]]; then
+    cmd_status
+    return 0
+  fi
+  case "$key" in
+    bin) echo "$CUSTOM_BIN" ;;
+    protocol) echo "$PROTOCOL" ;;
+    scan) echo "$SCAN" ;;
+    noize) echo "$NOIZE" ;;
+    ip) echo "$IP_MODE" ;;
+    socks_port) echo "$SOCKS_PORT" ;;
+    http_proxy_port) echo "$HTTP_PROXY_PORT" ;;
+    upstream) echo "$UPSTREAM" ;;
+    mark) echo "$MARK" ;;
+    quick_reconnect) echo "$QUICK_RECONNECT" ;;
+    h2) echo "$H2" ;;
+    fragment) echo "$FRAGMENT" ;;
+    fragment_size) echo "$FRAGMENT_SIZE" ;;
+    fragment_delay) echo "$FRAGMENT_DELAY" ;;
+    no_quic_v2) echo "$NO_QUIC_V2" ;;
+    ech) echo "$ECH" ;;
+    ech_dns) echo "$ECH_DNS" ;;
+    ech_domain) echo "$ECH_DOMAIN" ;;
+    no_data_check) echo "$NO_DATA_CHECK" ;;
+    keepalive) echo "$KEEPALIVE" ;;
+    peer) echo "$PEER" ;;
+    gool_peer) echo "$GOOL_PEER" ;;
+    wiw_outer) echo "$WIW_OUTER" ;;
+    wiw_inner) echo "$WIW_INNER" ;;
+    mim_outer) echo "$MIM_OUTER" ;;
+    mim_inner) echo "$MIM_INNER" ;;
+    dns) echo "$DNS" ;;
+    team) echo "$TEAM" ;;
+    gateway) echo "$GATEWAY" ;;
+    route_block) echo "$ROUTE_BLOCK" ;;
+    route_direct) echo "$ROUTE_DIRECT" ;;
+    log_level) echo "$LOG_LEVEL" ;;
+    extra_args) echo "$EXTRA_ARGS" ;;
+    wg_peer) echo "$WG_PEER" ;;
+    h2_peer) echo "$H2_PEER" ;;
+    no_profile_retry) echo "$NO_PROFILE_RETRY" ;;
+    validate_secs) echo "$VALIDATE_SECS" ;;
+    startup_secs) echo "$STARTUP_SECS" ;;
+    reconnect_secs) echo "$RECONNECT_SECS" ;;
+    perf) echo "$PERF" ;;
+    tls_groups) echo "$TLS_GROUPS" ;;
+    tls_ciphers) echo "$TLS_CIPHERS" ;;
+    tls13_ciphers) echo "$TLS13_CIPHERS" ;;
+    tls_key_shares) echo "$TLS_KEY_SHARES" ;;
+    tls_sigalgs) echo "$TLS_SIGALGS" ;;
+    enable_grease_sigalgs) echo "$ENABLE_GREASE_SIGALGS" ;;
+    tls_cert_compression) echo "$TLS_CERT_COMPRESSION" ;;
+    tls_alps) echo "$TLS_ALPS" ;;
+    tls_trust_anchors) echo "$TLS_TRUST_ANCHORS" ;;
+    tls_server_padding) echo "$TLS_SERVER_PADDING" ;;
+    enable_ech_grease) echo "$ENABLE_ECH_GREASE" ;;
+    disable_ocsp_stapling) echo "$DISABLE_OCSP_STAPLING" ;;
+    disable_sct) echo "$DISABLE_SCT" ;;
+    disable_session_ticket) echo "$DISABLE_SESSION_TICKET" ;;
+    disable_extension_permutation) echo "$DISABLE_EXTENSION_PERMUTATION" ;;
+    disable_grease) echo "$DISABLE_GREASE" ;;
+    tls_verify) echo "$TLS_VERIFY" ;;
+    api_address|enroll_address) echo "$API_ADDRESS" ;;
+    api_host) echo "$API_HOST" ;;
+    api_sni) echo "$API_SNI" ;;
+    masque_sni) echo "$MASQUE_SNI" ;;
+    routes_file) echo "$ROUTES_FILE" ;;
+    tor_bind) echo "$TOR_BIND" ;;
+    tor_http) echo "$TOR_HTTP" ;;
+    tor_dir) echo "$TOR_DIR" ;;
+    tor_bridges) echo "$TOR_BRIDGES" ;;
+    tor_bridge) echo "$TOR_BRIDGE" ;;
+    tor_bridge_file) echo "$TOR_BRIDGE_FILE" ;;
+    tor_relays) echo "$TOR_RELAYS" ;;
+    tor_relay_ports) echo "$TOR_RELAY_PORTS" ;;
+    tor_pt) echo "$TOR_PT" ;;
+    tor_pt_dir) echo "$TOR_PT_DIR" ;;
+    tor_country) echo "$TOR_COUNTRY" ;;
+    psiphon_mode) echo "$PSIPHON_MODE" ;;
+    psiphon_region) echo "$PSIPHON_REGION" ;;
+    psiphon_config) echo "$PSIPHON_CONFIG" ;;
+    psiphon_cdn_ips) echo "$PSIPHON_CDN_IPS" ;;
+    psiphon_cdn_sni) echo "$PSIPHON_CDN_SNI" ;;
+    psiphon_cdn_sets) echo "$PSIPHON_CDN_SETS" ;;
+    exit_loc) echo "$EXIT_LOC" ;;
+    exit_loc_secs) echo "$EXIT_LOC_SECS" ;;
+    access_id) echo "$ACCESS_ID" ;;
+    access_email) echo "$ACCESS_EMAIL" ;;
+    access_token) [[ -n "$ACCESS_TOKEN" ]] && echo "[REDACTED]" || true ;;
+    access_secret) [[ -n "$ACCESS_SECRET" ]] && echo "[REDACTED]" || true ;;
+    psiphon_bind) echo "$PSIPHON_BIND" ;;
+    psiphon_http) echo "$PSIPHON_HTTP" ;;
+    psiphon_dir) echo "$PSIPHON_DIR" ;;
+    stats) echo "$STATS" ;;
+    stats_secs) echo "$STATS_SECS" ;;
+    sysroute_enabled) echo "$SYSROUTE_ENABLED" ;;
+    sysroute_ipv6) echo "$SYSROUTE_IPV6" ;;
+    sysroute_dns_mode) echo "$SYSROUTE_DNS_MODE" ;;
+    sysroute_dns_servers) echo "$SYSROUTE_DNS_SERVERS" ;;
+    sysroute_fake_ip) echo "$SYSROUTE_FAKE_IP" ;;
+    sysroute_dns_hijack) echo "$SYSROUTE_DNS_HIJACK" ;;
+    sysroute_preset) echo "$SYSROUTE_PRESET" ;;
+    sysroute_mtu) echo "$SYSROUTE_MTU" ;;
+    sysroute_udp_mode) echo "$SYSROUTE_UDP_MODE" ;;
+    sysroute_persistent) echo "$SYSROUTE_PERSISTENT" ;;
+    sysroute_exclude) echo "$SYSROUTE_EXCLUDE" ;;
+    sysroute_exclude_uids) echo "$SYSROUTE_EXCLUDE_UIDS" ;;
+    sysroute_strict_route) echo "$SYSROUTE_STRICT_ROUTE" ;;
+    sysroute_auto_redirect) echo "$SYSROUTE_AUTO_REDIRECT" ;;
+    sysroute_stack_mode) echo "$SYSROUTE_STACK_MODE" ;;
+    sysroute_congestion) echo "$SYSROUTE_CONGESTION" ;;
+    sysroute_tcp_fastopen) echo "$SYSROUTE_TCP_FASTOPEN" ;;
+    sysroute_offload) echo "$SYSROUTE_OFFLOAD" ;;
+    sysroute_io_backend) echo "$SYSROUTE_IO_BACKEND" ;;
+    sysroute_log_level) echo "$SYSROUTE_LOG_LEVEL" ;;
+    zeptun_bin|sysroute_bin) echo "$ZEPTUN_BIN" ;;
+    *) echo "Unknown configuration key: $key" >&2; return 1 ;;
+  esac
+}
+
+reset_key() {
+  local key="$1"
+  case "$key" in
+    bin) CUSTOM_BIN="$DEFAULT_CUSTOM_BIN" ;;
+    protocol) PROTOCOL="$DEFAULT_PROTOCOL" ;;
+    scan) SCAN="$DEFAULT_SCAN" ;;
+    noize) NOIZE="$DEFAULT_NOIZE" ;;
+    ip) IP_MODE="$DEFAULT_IP" ;;
+    socks_port) SOCKS_PORT="$DEFAULT_SOCKS_PORT" ;;
+    http_proxy_port) HTTP_PROXY_PORT="$DEFAULT_HTTP_PROXY_PORT" ;;
+    upstream) UPSTREAM="$DEFAULT_UPSTREAM" ;;
+    mark) MARK="$DEFAULT_MARK" ;;
+    quick_reconnect) QUICK_RECONNECT="$DEFAULT_QUICK_RECONNECT" ;;
+    h2) H2="$DEFAULT_H2" ;;
+    fragment) FRAGMENT="$DEFAULT_FRAGMENT" ;;
+    fragment_size) FRAGMENT_SIZE="$DEFAULT_FRAGMENT_SIZE" ;;
+    fragment_delay) FRAGMENT_DELAY="$DEFAULT_FRAGMENT_DELAY" ;;
+    no_quic_v2) NO_QUIC_V2="$DEFAULT_NO_QUIC_V2" ;;
+    ech) ECH="$DEFAULT_ECH" ;;
+    ech_dns) ECH_DNS="$DEFAULT_ECH_DNS" ;;
+    ech_domain) ECH_DOMAIN="$DEFAULT_ECH_DOMAIN" ;;
+    no_data_check) NO_DATA_CHECK="$DEFAULT_NO_DATA_CHECK" ;;
+    keepalive) KEEPALIVE="$DEFAULT_KEEPALIVE" ;;
+    peer) PEER="$DEFAULT_PEER" ;;
+    gool_peer) GOOL_PEER="$DEFAULT_GOOL_PEER" ;;
+    wiw_outer) WIW_OUTER="$DEFAULT_WIW_OUTER" ;;
+    wiw_inner) WIW_INNER="$DEFAULT_WIW_INNER" ;;
+    mim_outer) MIM_OUTER="$DEFAULT_MIM_OUTER" ;;
+    mim_inner) MIM_INNER="$DEFAULT_MIM_INNER" ;;
+    dns) DNS="$DEFAULT_DNS" ;;
+    team) TEAM="$DEFAULT_TEAM" ;;
+    access_token) ACCESS_TOKEN="$DEFAULT_ACCESS_TOKEN" ;;
+    access_id) ACCESS_ID="$DEFAULT_ACCESS_ID" ;;
+    access_secret) ACCESS_SECRET="$DEFAULT_ACCESS_SECRET" ;;
+    access_email) ACCESS_EMAIL="$DEFAULT_ACCESS_EMAIL" ;;
+    gateway) GATEWAY="$DEFAULT_GATEWAY" ;;
+    route_block) ROUTE_BLOCK="$DEFAULT_ROUTE_BLOCK" ;;
+    route_direct) ROUTE_DIRECT="$DEFAULT_ROUTE_DIRECT" ;;
+    log_level) LOG_LEVEL="$DEFAULT_LOG_LEVEL" ;;
+    extra_args) EXTRA_ARGS="$DEFAULT_EXTRA_ARGS" ;;
+    wg_peer) WG_PEER="$DEFAULT_WG_PEER" ;;
+    h2_peer) H2_PEER="$DEFAULT_H2_PEER" ;;
+    no_profile_retry) NO_PROFILE_RETRY="$DEFAULT_NO_PROFILE_RETRY" ;;
+    validate_secs) VALIDATE_SECS="$DEFAULT_VALIDATE_SECS" ;;
+    startup_secs) STARTUP_SECS="$DEFAULT_STARTUP_SECS" ;;
+    reconnect_secs) RECONNECT_SECS="$DEFAULT_RECONNECT_SECS" ;;
+    perf) PERF="$DEFAULT_PERF" ;;
+    tls_groups) TLS_GROUPS="$DEFAULT_TLS_GROUPS" ;;
+    tls_ciphers) TLS_CIPHERS="$DEFAULT_TLS_CIPHERS" ;;
+    tls13_ciphers) TLS13_CIPHERS="$DEFAULT_TLS13_CIPHERS" ;;
+    tls_key_shares) TLS_KEY_SHARES="$DEFAULT_TLS_KEY_SHARES" ;;
+    tls_sigalgs) TLS_SIGALGS="$DEFAULT_TLS_SIGALGS" ;;
+    enable_grease_sigalgs) ENABLE_GREASE_SIGALGS="$DEFAULT_ENABLE_GREASE_SIGALGS" ;;
+    tls_cert_compression) TLS_CERT_COMPRESSION="$DEFAULT_TLS_CERT_COMPRESSION" ;;
+    tls_alps) TLS_ALPS="$DEFAULT_TLS_ALPS" ;;
+    tls_trust_anchors) TLS_TRUST_ANCHORS="$DEFAULT_TLS_TRUST_ANCHORS" ;;
+    tls_server_padding) TLS_SERVER_PADDING="$DEFAULT_TLS_SERVER_PADDING" ;;
+    enable_ech_grease) ENABLE_ECH_GREASE="$DEFAULT_ENABLE_ECH_GREASE" ;;
+    disable_ocsp_stapling) DISABLE_OCSP_STAPLING="$DEFAULT_DISABLE_OCSP_STAPLING" ;;
+    disable_sct) DISABLE_SCT="$DEFAULT_DISABLE_SCT" ;;
+    disable_session_ticket) DISABLE_SESSION_TICKET="$DEFAULT_DISABLE_SESSION_TICKET" ;;
+    disable_extension_permutation) DISABLE_EXTENSION_PERMUTATION="$DEFAULT_DISABLE_EXTENSION_PERMUTATION" ;;
+    disable_grease) DISABLE_GREASE="$DEFAULT_DISABLE_GREASE" ;;
+    tls_verify) TLS_VERIFY="$DEFAULT_TLS_VERIFY" ;;
+    api_address|enroll_address) API_ADDRESS="$DEFAULT_API_ADDRESS" ;;
+    api_host) API_HOST="$DEFAULT_API_HOST" ;;
+    api_sni) API_SNI="$DEFAULT_API_SNI" ;;
+    masque_sni) MASQUE_SNI="$DEFAULT_MASQUE_SNI" ;;
+    routes_file) ROUTES_FILE="$DEFAULT_ROUTES_FILE" ;;
+    tor_bind) TOR_BIND="$DEFAULT_TOR_BIND" ;;
+    tor_http) TOR_HTTP="$DEFAULT_TOR_HTTP" ;;
+    tor_dir) TOR_DIR="$DEFAULT_TOR_DIR" ;;
+    tor_bridges) TOR_BRIDGES="$DEFAULT_TOR_BRIDGES" ;;
+    tor_bridge) TOR_BRIDGE="$DEFAULT_TOR_BRIDGE" ;;
+    tor_bridge_file) TOR_BRIDGE_FILE="$DEFAULT_TOR_BRIDGE_FILE" ;;
+    tor_relays) TOR_RELAYS="$DEFAULT_TOR_RELAYS" ;;
+    tor_relay_ports) TOR_RELAY_PORTS="$DEFAULT_TOR_RELAY_PORTS" ;;
+    tor_pt) TOR_PT="$DEFAULT_TOR_PT" ;;
+    tor_pt_dir) TOR_PT_DIR="$DEFAULT_TOR_PT_DIR" ;;
+    tor_country) TOR_COUNTRY="$DEFAULT_TOR_COUNTRY" ;;
+    psiphon_mode) PSIPHON_MODE="$DEFAULT_PSIPHON_MODE" ;;
+    psiphon_region) PSIPHON_REGION="$DEFAULT_PSIPHON_REGION" ;;
+    psiphon_config) PSIPHON_CONFIG="$DEFAULT_PSIPHON_CONFIG" ;;
+    psiphon_cdn_ips) PSIPHON_CDN_IPS="$DEFAULT_PSIPHON_CDN_IPS" ;;
+    psiphon_cdn_sni) PSIPHON_CDN_SNI="$DEFAULT_PSIPHON_CDN_SNI" ;;
+    psiphon_cdn_sets) PSIPHON_CDN_SETS="$DEFAULT_PSIPHON_CDN_SETS" ;;
+    exit_loc) EXIT_LOC="$DEFAULT_EXIT_LOC" ;;
+    exit_loc_secs) EXIT_LOC_SECS="$DEFAULT_EXIT_LOC_SECS" ;;
+    psiphon_bind) PSIPHON_BIND="$DEFAULT_PSIPHON_BIND" ;;
+    psiphon_http) PSIPHON_HTTP="$DEFAULT_PSIPHON_HTTP" ;;
+    psiphon_dir) PSIPHON_DIR="$DEFAULT_PSIPHON_DIR" ;;
+    stats) STATS="$DEFAULT_STATS" ;;
+    stats_secs) STATS_SECS="$DEFAULT_STATS_SECS" ;;
+    sysroute_enabled) SYSROUTE_ENABLED="$DEFAULT_SYSROUTE_ENABLED" ;;
+    sysroute_ipv6) SYSROUTE_IPV6="$DEFAULT_SYSROUTE_IPV6" ;;
+    sysroute_dns_mode) SYSROUTE_DNS_MODE="$DEFAULT_SYSROUTE_DNS_MODE" ;;
+    sysroute_dns_servers) SYSROUTE_DNS_SERVERS="$DEFAULT_SYSROUTE_DNS_SERVERS" ;;
+    sysroute_fake_ip) SYSROUTE_FAKE_IP="$DEFAULT_SYSROUTE_FAKE_IP" ;;
+    sysroute_dns_hijack) SYSROUTE_DNS_HIJACK="$DEFAULT_SYSROUTE_DNS_HIJACK" ;;
+    sysroute_preset) SYSROUTE_PRESET="$DEFAULT_SYSROUTE_PRESET" ;;
+    sysroute_mtu) SYSROUTE_MTU="$DEFAULT_SYSROUTE_MTU" ;;
+    sysroute_udp_mode) SYSROUTE_UDP_MODE="$DEFAULT_SYSROUTE_UDP_MODE" ;;
+    sysroute_persistent) SYSROUTE_PERSISTENT="$DEFAULT_SYSROUTE_PERSISTENT" ;;
+    sysroute_exclude) SYSROUTE_EXCLUDE="$DEFAULT_SYSROUTE_EXCLUDE" ;;
+    sysroute_exclude_uids) SYSROUTE_EXCLUDE_UIDS="$DEFAULT_SYSROUTE_EXCLUDE_UIDS" ;;
+    sysroute_strict_route) SYSROUTE_STRICT_ROUTE="$DEFAULT_SYSROUTE_STRICT_ROUTE" ;;
+    sysroute_auto_redirect) SYSROUTE_AUTO_REDIRECT="$DEFAULT_SYSROUTE_AUTO_REDIRECT" ;;
+    sysroute_stack_mode) SYSROUTE_STACK_MODE="$DEFAULT_SYSROUTE_STACK_MODE" ;;
+    sysroute_congestion) SYSROUTE_CONGESTION="$DEFAULT_SYSROUTE_CONGESTION" ;;
+    sysroute_tcp_fastopen) SYSROUTE_TCP_FASTOPEN="$DEFAULT_SYSROUTE_TCP_FASTOPEN" ;;
+    sysroute_offload) SYSROUTE_OFFLOAD="$DEFAULT_SYSROUTE_OFFLOAD" ;;
+    sysroute_io_backend) SYSROUTE_IO_BACKEND="$DEFAULT_SYSROUTE_IO_BACKEND" ;;
+    sysroute_log_level) SYSROUTE_LOG_LEVEL="$DEFAULT_SYSROUTE_LOG_LEVEL" ;;
+    zeptun_bin|sysroute_bin) ZEPTUN_BIN="$DEFAULT_ZEPTUN_BIN" ;;
+    *) echo "Unknown configuration key: $key" >&2; return 1 ;;
+  esac
+}
+
+cmd_reset_config() {
+  local target="${1:-all}"
+  if [[ "$target" == "all" || -z "$target" ]]; then
+    # Keep binary locations: they are machine setup, not tunable settings.
+    local keep_bin="$CUSTOM_BIN" keep_zbin="$ZEPTUN_BIN"
+    rm -f "$CONFIG_FILE"
+    load_config
+    CUSTOM_BIN="$keep_bin"
+    ZEPTUN_BIN="$keep_zbin"
+    save_config
+    if is_running; then
+      cmd_restart
+    fi
+    echo "All configuration options reset to defaults (custom binary paths kept)."
+  else
+    reset_key "$target" || return 1
+    save_config
+    if is_running; then
+      cmd_restart
+    fi
+    echo "Reset '$target' to default."
+  fi
+}
+
+cmd_apply_preset() {
+  local p="${1:-default}"
+  case "$p" in
+    default)
+      PROTOCOL="masque"
+      H2="0"
+      SCAN="balanced"
+      NOIZE="firewall"
+      FRAGMENT="0"
+      FRAGMENT_SIZE="8-16"
+      FRAGMENT_DELAY="2-10"
+      ECH="off"
+      IP_MODE="v4"
+      ;;
+    stealth)
+      PROTOCOL="masque"
+      H2="1"
+      SCAN="balanced"
+      NOIZE="firewall"
+      FRAGMENT="1"
+      FRAGMENT_SIZE="8-16"
+      FRAGMENT_DELAY="2-10"
+      ECH="auto"
+      ENABLE_ECH_GREASE="1"
+      ;;
+    speed)
+      PROTOCOL="masque"
+      H2="0"
+      SCAN="turbo"
+      NOIZE="light"
+      FRAGMENT="0"
+      SYSROUTE_UDP_MODE="udp"
+      SYSROUTE_CONGESTION="cubic"
+      ;;
+    tor_multihop)
+      PROTOCOL="tor"
+      TOR_RELAYS="auto"
+      TOR_RELAY_PORTS="web"
+      TOR_BRIDGES=""
+      ;;
+    psiphon_bypass)
+      PROTOCOL="psiphon"
+      PSIPHON_MODE="auto"
+      PSIPHON_REGION=""
+      ;;
+    *)
+      echo "Unknown preset: $p (supported: default, stealth, speed, tor_multihop, psiphon_bypass)" >&2
+      return 1
+      ;;
+  esac
+  save_config
+  if is_running; then
+    cmd_restart
+  fi
+  echo "Applied preset '$p'"
+}
+
+cmd_export_config() {
+  local target_file="${1:-}"
+  target_file="${target_file/#\~/$HOME}"
+  save_config >/dev/null
+  if [[ -n "$target_file" ]]; then
+    cp "$CONFIG_FILE" "$target_file"
+    echo "Configuration exported to $target_file"
+  else
+    if [[ -f "$CONFIG_FILE" ]]; then
+      cat "$CONFIG_FILE"
+    fi
+  fi
+}
+
+cmd_import_config() {
+  local source_file="${1:-}"
+  source_file="${source_file/#\~/$HOME}"
+  [[ -n "$source_file" ]] || { echo "Usage: aether-ctl import <file>" >&2; return 1; }
+  [[ -f "$source_file" ]] || { echo "Error: file '$source_file' not found." >&2; return 1; }
+
+  # load_config sources CONFIG_FILE, so an imported file must be inert shell.
+  # Allow only NAME=value where value is empty, single-quoted, or unquoted
+  # with backslash-escaped specials (the forms printf %q emits). This rejects
+  # $(...), backticks, $VAR, ;, &, |, globs, and ANSI-C $'...' quoting.
+  local line
+  local re_name='^AETHER_CFG_[A-Z0-9_]+='
+  local re_plain="^([A-Za-z0-9_@%+=:,./^-]|\\\\.)*$"
+  local re_quoted="^'[^']*'$"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ ! "$line" =~ $re_name ]]; then
+      echo "Error: file contains invalid line: $line" >&2
+      return 1
+    fi
+    local val="${line#*=}"
+    if [[ ! "$val" =~ $re_plain && ! "$val" =~ $re_quoted ]]; then
+      echo "Error: unsafe or unsupported value in line: ${line%%=*}" >&2
+      return 1
+    fi
+  done < "$source_file"
+
+  cp "$source_file" "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE" 2>/dev/null || true
+  load_config
+  save_config
+  if is_running; then
+    cmd_restart
+  fi
+  echo "Configuration imported from $source_file"
+}
+
+cmd_command() {
+  local bin
+  bin=$(detect_aether_bin 2>/dev/null || echo "aether")
+  mapfile -t ARGS < <(build_args "$bin")
+
+  local env_str=""
+  [[ -n "$TOR_COUNTRY" ]] && env_str+="AETHER_TOR_COUNTRY=$(printf '%q' "$TOR_COUNTRY") "
+  [[ -n "$ACCESS_TOKEN" ]] && env_str+="AETHER_ACCESS_TOKEN='[REDACTED]' "
+  [[ -n "$ACCESS_ID" ]] && env_str+="AETHER_ACCESS_CLIENT_ID='[REDACTED]' "
+  [[ -n "$ACCESS_SECRET" ]] && env_str+="AETHER_ACCESS_CLIENT_SECRET='[REDACTED]' "
+  [[ -n "$ACCESS_EMAIL" ]] && env_str+="AETHER_ACCESS_EMAIL=$(printf '%q' "$ACCESS_EMAIL") "
+  if [[ "$TLS_VERIFY" == "0" ]]; then
+    env_str+="AETHER_TLS_VERIFY=0 "
+  elif [[ "$TLS_VERIFY" == "1" ]]; then
+    env_str+="AETHER_TLS_VERIFY=1 "
+  fi
+
+  local quoted_args=()
+  for arg in "${ARGS[@]}"; do
+    quoted_args+=("$(printf '%q' "$arg")")
+  done
+  echo "${env_str}${bin} ${quoted_args[*]}"
+}
+
+cmd_doctor() {
+  local format="${1:-text}"
+  local abin aver acap="no" arun="no" apid=""
+  abin=$(detect_aether_bin 2>/dev/null || true)
+  if [[ -n "$abin" && -x "$abin" ]]; then
+    aver=$(get_binary_version "$abin")
+    has_cap_net_admin "$abin" && acap="yes"
+  fi
+  if is_running; then
+    arun="yes"
+    apid=$(get_running_pid || true)
+  fi
+
+  zeptun_state_read
+  local zbin zver zcap="no" zrun="no" zpid="" zstate="$Z_STATE"
+  zbin=$(zeptun_discover_bin 2>/dev/null || true)
+  if [[ -n "$zbin" && -x "$zbin" ]]; then
+    zver=$(get_zeptun_version "$zbin")
+    zeptun_has_cap_net_admin "$zbin" && zcap="yes"
+  fi
+  if [[ "$Z_STATE" == "RUNNING" ]]; then
+    zrun="yes"
+    zpid=$(zeptun_get_pid || true)
+  fi
+
+  local pt_lyrebird="not found" pt_psiphon="not found"
+  [[ -x "$BIN_DIR/pt/lyrebird" ]] && pt_lyrebird="ok ($BIN_DIR/pt/lyrebird)"
+  [[ -x "$BIN_DIR/pt/psiphon-tunnel-core" ]] && pt_psiphon="ok ($BIN_DIR/pt/psiphon-tunnel-core)"
+
+  local socks_listen="free"
+  if command -v ss &>/dev/null && ss -tulpn 2>/dev/null | grep -q ":${SOCKS_PORT} "; then
+    socks_listen="bound"
+  fi
+
+  local tun_dev="absent"
+  if command -v ip &>/dev/null && ip link show dev zeptun0 &>/dev/null; then
+    tun_dev="active"
+  fi
+
+  local eg_kind eg_addr
+  eg_kind=$(tun_egress_kind)
+  eg_addr=$(tun_egress_addr)
+
+  local egress_loop_warning=""
+  if [[ "$SYSROUTE_ENABLED" == "1" && "$eg_kind" != "warp" ]]; then
+    egress_loop_warning="Notice: $eg_kind transports only support TCP. Pluggable transport helpers (lyrebird/psiphon) do not inherit SO_MARK 0xff across exec. Fake-IP DNS and helper UID exclusion are required to prevent routing loops."
+  fi
+
+  local probe_res="not checked"
+  if [[ "$arun" == "yes" ]]; then
+    if probe_egress "127.0.0.1:${SOCKS_PORT}" "$eg_kind"; then
+      probe_res="success"
+    else
+      probe_res="failed"
+    fi
+  fi
+
+  if [[ "$format" == "--json" || "$format" == "json" ]]; then
+    cat <<EOF
+{
+  "aether": {
+    "binary": $(json_str "$abin"),
+    "version": $(json_str "$aver"),
+    "pinned_version": $(json_str "$AETHER_CORE_VERSION"),
+    "cap_net_admin": $( [[ "$acap" == "yes" ]] && echo "true" || echo "false" ),
+    "running": $( [[ "$arun" == "yes" ]] && echo "true" || echo "false" ),
+    "pid": $(json_str "$apid"),
+    "socks_port": $(json_num "$SOCKS_PORT" 1819),
+    "socks_port_status": $(json_str "$socks_listen")
+  },
+  "zeptun": {
+    "binary": $(json_str "$zbin"),
+    "version": $(json_str "$zver"),
+    "pinned_version": $(json_str "$ZEPTUN_VERSION"),
+    "cap_net_admin": $( [[ "$zcap" == "yes" ]] && echo "true" || echo "false" ),
+    "running": $( [[ "$zrun" == "yes" ]] && echo "true" || echo "false" ),
+    "state": $(json_str "$zstate"),
+    "pid": $(json_str "$zpid"),
+    "tun_device": $(json_str "$tun_dev")
+  },
+  "helpers": {
+    "lyrebird": $(json_str "$pt_lyrebird"),
+    "psiphon_tunnel_core": $(json_str "$pt_psiphon")
+  },
+  "routing": {
+    "egress_kind": $(json_str "$eg_kind"),
+    "egress_addr": $(json_str "$eg_addr"),
+    "warning": $(json_str "$egress_loop_warning"),
+    "probe": $(json_str "$probe_res")
+  }
+}
+EOF
+    return 0
+  fi
+
+  echo "=== Aether System Doctor ==="
+  echo "Aether Core:"
+  echo "  Binary:        ${abin:-Not found}"
+  echo "  Version:       ${aver:-N/A} (Pinned: ${AETHER_CORE_VERSION})"
+  echo "  CAP_NET_ADMIN: $acap"
+  echo "  Running:       $arun (PID: ${apid:-none})"
+  echo "  SOCKS5 Port:   ${SOCKS_PORT} ($socks_listen)"
+  echo ""
+  echo "Zeptun Engine:"
+  echo "  Binary:        ${zbin:-Not found}"
+  echo "  Version:       ${zver:-N/A} (Pinned: ${ZEPTUN_VERSION})"
+  echo "  CAP_NET_ADMIN: $zcap"
+  echo "  State:         $zstate (Running: $zrun, Device: $tun_dev)"
+  echo ""
+  echo "Pluggable Transport Helpers:"
+  echo "  Lyrebird:      $pt_lyrebird"
+  echo "  Psiphon Core:  $pt_psiphon"
+  echo ""
+  echo "Routing & Egress:"
+  echo "  Protocol:      $PROTOCOL"
+  echo "  Egress Type:   $eg_kind ($eg_addr)"
+  echo "  Egress Probe:  $probe_res"
+  if [[ -n "$egress_loop_warning" ]]; then
+    echo ""
+    echo "[!] WARNING: $egress_loop_warning"
+  fi
+  echo "============================"
+}
+
 case "${1:-status}" in
   status) cmd_status ;;
   start) cmd_start ;;
@@ -2954,6 +3670,13 @@ case "${1:-status}" in
   toggle) cmd_toggle ;;
   foreground) cmd_foreground ;;
   install) cmd_install ;;
+  get) shift; cmd_get_config "$@" ;;
+  reset) shift; cmd_reset_config "$@" ;;
+  preset) shift; cmd_apply_preset "$@" ;;
+  export) shift; cmd_export_config "$@" ;;
+  import) shift; cmd_import_config "$@" ;;
+  command) cmd_command ;;
+  doctor) shift; cmd_doctor "$@" ;;
   set) shift; cmd_set_config "$@" ;;
   set-protocol) shift; cmd_set_protocol "$@" ;;
   cores|list-cores) find_all_cores ;;
@@ -2980,7 +3703,7 @@ case "${1:-status}" in
   zeptun-remove) shift; cmd_zeptun_remove "${1:-}" ;;
   update-cores|upgrade) cmd_update_cores ;;
   *)
-    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|set <key> <val>|cores|remove-core [path]|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove [path]|update-cores}"
+    echo "Usage: aether-ctl {status|start|stop|restart|toggle|install|get <key>|set <key> <val>|reset [key|all]|export [file]|import <file>|command|doctor|cores|remove-core [path]|logs [N]|clear-logs|clear-cache|probe|system-route {status|start|stop|restart|zeptun-logs}|zeptun-install|zeptun-remove [path]|update-cores}"
     exit 1
     ;;
 esac
